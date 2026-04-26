@@ -125,7 +125,7 @@ if not S then
         processed_blocks = {},
         last_site_id     = nil,
         last_block_count = 0,
-        biome_cache      = {},
+        --biome_cache      = {},
     }
     _G.__smoothfloor_state = S
 end
@@ -159,21 +159,24 @@ local function build_inorganic_cache()
     log(("inorganic cache built: %d matching"):format(count))
 end
 
--- ============================================================================
--- BIOME CACHE
--- ============================================================================
-
--- Cached by biome region
 local function get_biome_for_tile(wx, wy, wz)
     local rx, ry = dfhack.maps.getTileBiomeRgn(wx, wy, wz)
     if not rx then return nil end
-    local key = rx .. "," .. ry
-    local v   = S.biome_cache[key]
-    if v ~= nil then return v ~= false and v or nil end
+    -- SWD: getRegionBiome() is *extremely* fast, even after the slowdown of
+    --      converting two Lua integer variables into C++ integer variables.
+    --      it is almost certainly faster than trying to manage a cache in Lua.
     local ri = dfhack.maps.getRegionBiome(rx, ry)
-    if not ri then S.biome_cache[key] = false; return nil end
-    local b = df.world_geo_biome.find(ri.geo_index)
-    if b then S.biome_cache[key] = b; return b end
+    -- SWD: yeah, even with a .find(), the C++ code is probably faster.
+    -- SWD: is the .find() even necessary?  it looks like you can just
+    --      get your data from world.world_data.geo_biomes[ri] .  testing that.
+    --local b = df.world_geo_biome.find(ri.geo_index)
+    local b = df.world_geo_biome.get_vector()[ri.geo_index]
+    assert(b)
+    assert(b.index == ri.geo_index)
+    do return b end
+    -- SWD: remaining code disabled.
+
+    -- SWD: I can't tell what this code does.  is it fallback code?
     local max_z = df.global.world.map.z_count - 1
     for dz = 1, math.min(300, max_z - wz) do
         local rx2, ry2 = dfhack.maps.getTileBiomeRgn(wx, wy, wz + dz)
