@@ -1,12 +1,19 @@
 -- ruins_smoothfloor.lua
+-- SWD: if you use a longquote string or a lonquote comment with four ====,
+--      DFHack will treat the string or comment as help text,
+--      and will e.g. show it in the Launcher.
+--[====[
+    ruins_smoothfloor enable
+    ruins_smoothfloor disable
+    ruins_smoothfloor force
+    ruins_smoothfloor status
+--]====]
 
---   ruins_smoothfloor enable
---   ruins_smoothfloor disable
---   ruins_smoothfloor force
---   ruins_smoothfloor status
-
-local INITIAL_DELAY_TICKS  = 120
-local SCAN_INTERVAL_TICKS  = 3
+-- SWD: renamed these, added SCAN_MODE, changed to raw frames (i.e. FPS),
+--      otherwise, the conversion only runs when the adventure moves.
+local INITIAL_DELAY  = 5
+local DELAY_INTERVAL  = 1
+local DELAY_MODE = 'frames'
 
 local SMOOTH_CLASSES = {
     HEAVY_STRUCTURE  = { floor=true, wall=true  },
@@ -25,6 +32,12 @@ local SHAPE_WALL     = df.tiletype_shape.WALL
 local SPECIAL_SMOOTH = df.tiletype_special.SMOOTH
 local BASIC_FLOOR    = df.tiletype_shape_basic.Floor
 
+-- SWD: These are constants.  You can hard-code the names.  Much faster.
+local SMOOTH_FLOOR_TT = df.tiletype.StoneFloorSmooth
+local SMOOTH_LAVA_FLOOR_TT = df.tiletype.LavaFloorSmooth
+local OPEN_SPACE_TT  = df.tiletype.OpenSpace
+
+--[[
 local SMOOTH_FLOOR_TT = (function()
     for i = 0, 65535 do
         local a = df.tiletype.attrs[i]
@@ -34,7 +47,10 @@ local SMOOTH_FLOOR_TT = (function()
         end
     end
 end)()
+assert(SMOOTH_FLOOR_TT == df.tiletype.StoneFloorSmooth)
+--]]
 
+--[[
 local SMOOTH_LAVA_FLOOR_TT = (function()
     for i = 0, 65535 do
         local a = df.tiletype.attrs[i]
@@ -44,19 +60,25 @@ local SMOOTH_LAVA_FLOOR_TT = (function()
         end
     end
 end)()
+assert(SMOOTH_LAVA_FLOOR_TT == df.tiletype.LavaFloorSmooth)
+--]]
 
+--[[    SWD: This code took about 75 milliseconds to fill its tables.
 local smooth_stone_wall_by_suffix = {}
 local smooth_lava_wall_by_suffix  = {}
 local smooth_stone_wall_fallback  = nil  -- "" suffix = isolated pillar
-local smooth_lava_wall_fallback   = nil
-
+local smooth_lava_wall_fallback   = nil  -- SWD: the above statement is false; there is NO tile
+                                         --      named StoneWallSmooth or LavaWallSmooth.
+                                         -- SWD: testing showed the fallbacks were never set.
 do
     for i = 0, 65535 do
         local name  = df.tiletype[i]
         local attrs = df.tiletype.attrs[i]
         if name and attrs and attrs.special == SPECIAL_SMOOTH and attrs.shape == SHAPE_WALL then
-            local sname = tostring(name)
+            local sname = tostring(name)    -- SWD: that was not necessary; name was already a string.
+                                            --      (You already checked that it is not nil.)
             local suf = sname:match("^StoneWallSmooth([LRUD]*)$")
+                                            -- this match was buggy; '2' is also legal in suffixes.
             if suf ~= nil then
                 smooth_stone_wall_by_suffix[suf] = i
                 if suf == "" then smooth_stone_wall_fallback = i end
@@ -72,11 +94,37 @@ do
         smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix
         smooth_lava_wall_fallback  = smooth_stone_wall_fallback
     end
-end
+end --]]
 
+-- SWD: In contrast, this code runs in less than half a millisecond; almost too small to measure.
+local smooth_stone_wall_by_suffix = {}
+local smooth_lava_wall_by_suffix  = {}
+local smooth_stone_wall_fallback  = df.tiletype.StonePillar
+local smooth_lava_wall_fallback   = df.tiletype.LavaPillar
+
+for prefix, table in pairs{
+    Stone = smooth_stone_wall_by_suffix,
+    Lava = smooth_lava_wall_by_suffix,
+} do
+    for _,L in ipairs{'', 'L'} do
+        for _,R in ipairs{'', 'R'} do
+            for _,U in ipairs{'', 'U'} do
+                for _,D in ipairs{'', 'D'} do
+                    local suffix = L .. R .. U .. D
+                    local name = prefix .. "WallSmooth" .. suffix
+                    local num = df.tiletype[name]
+                    if num then
+                        table[suffix] = num
+                    end
+                end
+            end
+        end
+    end
+end
 
 -- Per-tiletype kind lookup built once at load
 
+-- SWD: these mappings could easily be put in the smooth_xxx_wall_by_suffix table.  just saying.
 local smooth_stone_wall_tt_set = {}
 local smooth_lava_wall_tt_set  = {}
 for _, i in pairs(smooth_stone_wall_by_suffix) do smooth_stone_wall_tt_set[i] = true end
@@ -86,9 +134,17 @@ end
 
 local tt_kind = (function()
     local t = {}
-    for i = 0, 65535 do
+    -- SWD: This for loop does a lot of extra processing, which slows it down quite a bit.
+    --for i = 0, 65535 do
+    -- SWD: I changed the for loop to process only existing tiletypes.  Much faster.
+    --      In general, you should always process tiletypes as ipairs(), which will give
+    --      you tiletype numbers as the key and tiletype names as the value.
+    for i,name in ipairs(df.tiletype) do
         local a = df.tiletype.attrs[i]
-        if a then
+        --if a then
+        -- SWD: 'a' will always contain data.  it might not be valid though!
+        --      df.tiletype.attrs always returns a table, even if it has data of '-1', etc.
+        -- SWD: with the new loop limiting to the number of tiletypes, 'a' will always be valid.
             local mat   = a.material
             local sa    = df.tiletype_shape.attrs[a.shape]
             local basic = sa and sa.basic_shape
@@ -107,7 +163,7 @@ local tt_kind = (function()
                     t[i] = 'lw_r'
                 end
             end
-        end
+        --end
     end
     return t
 end)()
@@ -116,24 +172,42 @@ end)()
 -- STATE
 -- ============================================================================
 
+-- SWD: I still don't understand why you need this kind of super-global,
+--      and I also don't believe that you need to use rawget() on it.
+--      I think I would write it as
+--      _G.__smoothfloor_state = _G.__smoothfloor_state or {
+--          init table stuff
+--      }
+--      local S = _G.__smoothfloor_state
+--
+-- SWD: granted, it is good to have watcher_enabled, scan_gen, and the new
+--      current_timeout_id as a super-global so that the data is available
+--      even when the script is edited.
 local S = rawget(_G, "__smoothfloor_state")
 if not S then
     S = {
         watcher_enabled  = false,
         scan_gen         = 0,
-        init_gen         = 0,
+        --init_gen         = 0,     -- SWD: removed
         processed_blocks = {},
-        last_site_id     = nil,
-        last_block_count = 0,
-        --biome_cache      = {},
+        --last_site_id     = nil,   -- SWD: removed in favor of new function map_changed()
+        --last_block_count = 0,     -- SWD: removed in favor of new function map_changed()
+        --biome_cache      = {},    -- SWD: removed
+        current_timeout_id = -1,    -- SWD: new
     }
     _G.__smoothfloor_state = S
 end
 if S.scan_gen         == nil then S.scan_gen         = 0 end
-if S.init_gen         == nil then S.init_gen         = 0 end
-if S.last_block_count == nil then S.last_block_count = 0 end
+--if S.init_gen         == nil then S.init_gen         = 0 end  -- SWD: removed
+--if S.last_block_count == nil then S.last_block_count = 0 end  -- SWD: removed
 
-local function log(msg) print("[smoothfloor] " .. msg) end
+-- ============================================================================
+-- LIBRARY FUNCTIONS
+-- ============================================================================
+
+-- SWD: string.format() moved into this function.  That's much better
+--      than requiring every caller that needs formatting to do it itself.
+local function log(msg, ...) print("[smoothfloor] " .. string.format(msg, ...)) end
 
 -- ============================================================================
 -- INORGANIC CACHE
@@ -144,10 +218,19 @@ local smooth_inorganic_cache = nil
 local function build_inorganic_cache()
     smooth_inorganic_cache = {}
     local count = 0
-    local all   = df.global.world.raws.inorganics.all
-    for i = 0, #all - 1 do
-        local mat = all[i].material
-        for _, rc in pairs(mat.reaction_class) do
+    -- SWD: using ipairs() means you don't have to think about whether to start
+    --      the for loop at 0 or 1, and whether to end at #array-1 or #array.
+    --local all   = df.global.world.raws.inorganics.all
+    --for i = 0, #all - 1 do
+    for i, m in ipairs(df.global.world.raws.inorganics.all) do
+        --local mat = all[i].material
+        -- SWD: also, you should almost always use ipairs(), not pairs(),
+        --      on Dwarf Fortress's data structures.
+        --      if it's a vector or a raw array, use ipairs().
+        --for _, rc in pairs(mat.reaction_class) do
+        local mat = m.material
+        for _, rc in ipairs(mat.reaction_class) do
+            assert(type(rc.value) == "string")
             local cfg = SMOOTH_CLASSES[rc.value]
             if cfg then
                 smooth_inorganic_cache[i] = cfg
@@ -156,25 +239,24 @@ local function build_inorganic_cache()
             end
         end
     end
-    log(("inorganic cache built: %d matching"):format(count))
+    log("inorganic cache built: %d matching", count)
 end
 
 local function get_biome_for_tile(wx, wy, wz)
     local rx, ry = dfhack.maps.getTileBiomeRgn(wx, wy, wz)
+    -- SWD: note: this is not necessary; a valid tile will always have a biome region.
     if not rx then return nil end
     -- SWD: getRegionBiome() is *extremely* fast, even after the slowdown of
     --      converting two Lua integer variables into C++ integer variables.
     --      it is almost certainly faster than trying to manage a cache in Lua.
     local ri = dfhack.maps.getRegionBiome(rx, ry)
     -- SWD: yeah, even with a .find(), the C++ code is probably faster.
-    -- SWD: is the .find() even necessary?  it looks like you can just
-    --      get your data from world.world_data.geo_biomes[ri] .  testing that.
     --local b = df.world_geo_biome.find(ri.geo_index)
+    -- SWD: is the .find() even necessary?  it looks like you can just get
+    --      your geo_biome by indexing the vector.  testing that.  A: yes, it works.
     local b = df.world_geo_biome.get_vector()[ri.geo_index]
-    assert(b)
-    assert(b.index == ri.geo_index)
     do return b end
-    -- SWD: remaining code disabled.
+    -- SWD: remaining code disabled as unnecessary.
 
     -- SWD: I can't tell what this code does.  is it fallback code?
     local max_z = df.global.world.map.z_count - 1
@@ -238,14 +320,21 @@ local function scan_block(block, resuffix)
             local tt   = block.tiletype[lx][ly]
             local kind = tt_kind[tt]
             if kind == 'sf' or kind == 'sw' or kind == 'lf' or kind == 'lw' then
+                -- SWD: why are you not rewriting hidden blocks?  Just for speed?
                 if block.designation[lx][ly].hidden then
                     has_hidden = true
+                elseif tt == OPEN_SPACE_TT then
+                    -- do nothing; empty air can't be smoothed.
                 else
                     local b = get_biome_for_tile(bx+lx, by+ly, bz)
+                    -- SWD: this test is not necessary; a valid tile will always have a biome.
                     if b then
                         local layer = b.layers[block.designation[lx][ly].geolayer_index]
+                        -- SWD: the first test is not necessary; you will always have a layer.
                         local cfg = layer and smooth_inorganic_cache[layer.mat_index]
                         if not cfg then
+                            -- SWD: do remember that pairs() ordering is not guaranteed to be linear.
+                            --      It usually is for DF data types, but I wouldn't trust that.  Use ipairs().
                             for _, fl in pairs(b.layers) do
                                 cfg = smooth_inorganic_cache[fl.mat_index]
                                 if cfg then break end
@@ -275,6 +364,7 @@ local function scan_block(block, resuffix)
                         block.tiletype[lx][ly] = wtt
                         walls = walls + 1
                     end
+                -- SWD: shouldn't there be an else clause where you set has_hidden = true ?
                 end
             end
         end
@@ -298,17 +388,22 @@ local function convert_all(force)
     if not dfhack.isMapLoaded() then return end
     if not smooth_inorganic_cache then build_inorganic_cache() end
 
-    local site_id = get_site_id()
-    if force or site_id ~= S.last_site_id then
-        S.processed_blocks  = {}
-        S.last_site_id      = site_id
-        S.last_block_count  = 0
-    end
+    -- SWD: map_changed() is now dealing with sanity checks.
+    --local site_id = get_site_id()
+    --if force or site_id ~= S.last_site_id then
+    --    S.processed_blocks  = {}
+    --    S.last_site_id      = site_id
+    --    S.last_block_count  = 0
+    --end
 
     local tf, tw = 0, 0
+    -- SWD: This is the biggest problem this script has.  An adventurer-mode map
+    --      has approximately then thousand blocks, so the inner loop of scan_block()
+    --      runs two and a half million times.
     for _, block in ipairs(df.global.world.map.map_blocks) do
         local bk = ("%d,%d,%d"):format(block.map_pos.x, block.map_pos.y, block.map_pos.z)
         if not S.processed_blocks[bk] then
+            -- SWD: I really don't understand the logic for partial aka has_hidden.
             local f, w, partial = scan_block(block, force)
             if not partial then S.processed_blocks[bk] = true end
             tf = tf + f; tw = tw + w
@@ -316,8 +411,43 @@ local function convert_all(force)
     end
 
     if tf + tw > 0 then
-        log(("Smoothed: floors=%d walls=%d"):format(tf, tw))
+        log("Smoothed: floors=%d walls=%d", tf, tw)
     end
+end
+
+-- ============================================================================
+-- MAP CHANGED?
+-- ============================================================================
+
+-- SWD: Test these DF variables to see if the map changed.
+-- SWD Q: should this be part of the super-global?
+-- This array should contain individual tables containing functions
+--      that take no parameters and return a primitive value to track.
+--      These values should be numbers or strings.
+--      Implementation note: the return values are cached as the second
+--      elements of the tables.
+local map_changed_tests = {
+    { get_site_id },
+    { function() return df.global.world.world_data.midmap_data.adv_region_x end },
+    { function() return df.global.world.world_data.midmap_data.adv_region_y end },
+    { function() return df.global.world.world_data.midmap_data.adv_emb_x end },
+    { function() return df.global.world.world_data.midmap_data.adv_emb_y end },
+    { function() return #df.global.world.map.map_blocks end },      -- vector size
+}
+
+-- SWD: Returns true iff the map changed.  Called very frequently!
+local function map_changed()
+    local changed = false
+    for i,test in ipairs(map_changed_tests) do
+        if test[2] ~= (test[1])() then changed = true; end
+    end
+    if not changed then return false end
+
+    log("map_changed() detected a map change.")
+    for i,test in ipairs(map_changed_tests) do
+        test[2] = (test[1])()
+    end
+    return true
 end
 
 -- ============================================================================
@@ -325,39 +455,52 @@ end
 -- ============================================================================
 
 local function stop_watcher()
+    dfhack.timeout_active(S.current_timeout_id, nil)     -- if a timeout is active, cancel it.
+    S.current_timeout_id = -1
     S.watcher_enabled = false
     S.scan_gen        = S.scan_gen + 1
 end
 
--- Checks block count every 3 ticks; only runs convert_all when DF has loaded new chunks.
-local function scan_tick(gen)
+-- Called very frequently!
+-- Checks for map-changed every frame; only runs convert_all when the map changes.
+-- delay is an optional parameter, used for the initial startup delay.
+-- SWD: I rewrote most of this logic.
+-- SWD: I think this is cheap enough to run on every single frame.
+--      My only concern is that the call to dfhack.timeout creates a new closure
+--      (that is, defines a new temporary function) every time.
+local function timeout_callback(gen, delay)
+    S.current_timeout_id = -1   -- no longer valid.
     if not S.watcher_enabled then return end
     if gen ~= S.scan_gen     then return end
-    if not is_player_map() and dfhack.isMapLoaded() then
-        local n = #df.global.world.map.map_blocks
-        if n ~= S.last_block_count then
-            S.last_block_count = n
-            convert_all(false)
-        end
+    if not dfhack.isMapLoaded()  then return end
+
+    -- SWD: I suppose you're checking is_player_map() so that you don't corrupt a player fort?
+    if not delay and not is_player_map() and map_changed() then
+        convert_all(false)
     end
-    dfhack.timeout(SCAN_INTERVAL_TICKS, 'ticks', function() scan_tick(gen) end)
+
+    delay = delay or DELAY_INTERVAL
+    S.current_timeout_id = dfhack.timeout(DELAY_INTERVAL, DELAY_MODE, function() timeout_callback(gen) end)
 end
 
+-- SWD: minor rewrite of this logic.
 local function start_watcher()
-    if S.watcher_enabled then return end
+    dfhack.timeout_active(S.current_timeout_id, nil)     -- if a timeout is active, cancel it.
     S.watcher_enabled = true
     S.scan_gen        = S.scan_gen + 1
-    scan_tick(S.scan_gen)
+    S.current_timeout_id = dfhack.timeout(INITIAL_DELAY, DELAY_MODE, function() timeout_callback(S.scan_gen) end)
 end
 
-local function schedule_initial()
-    S.init_gen    = S.init_gen + 1
-    local gen     = S.init_gen
-    dfhack.timeout(INITIAL_DELAY_TICKS, 'ticks', function()
-        if gen ~= S.init_gen then return end
-        convert_all(false)
-    end)
-end
+-- SWD: I combined this with start_watcher.
+--local function schedule_initial()
+--    S.init_gen    = S.init_gen + 1
+--    local gen     = S.init_gen
+--    dfhack.timeout(INITIAL_DELAY, DELAY_MODE, function()
+--        if gen ~= S.init_gen then return end
+--        convert_all(false)
+--    end)
+--end
+
 
 -- ============================================================================
 -- COMMANDS
@@ -367,27 +510,32 @@ local args = { ... }
 local cmd  = args[1] or "enable"
 
 if cmd == "enable" then
-    if not smooth_inorganic_cache then build_inorganic_cache() end
-    convert_all(false)
+    -- SWD: smooth_inorganic_cache is also built in convert_all, which is a better place.
+    --if not smooth_inorganic_cache then build_inorganic_cache() end
+    --SWD removed this call; only timeout_callback and "force" should call convert_all.
+    --convert_all(false)
     start_watcher()
-    schedule_initial()
 elseif cmd == "force" then
-    if not smooth_inorganic_cache then build_inorganic_cache() end
+    -- SWD: smooth_inorganic_cache is also built in convert_all, which is a better place.
+    --if not smooth_inorganic_cache then build_inorganic_cache() end
+    map_changed()       -- call this for the side effects.
     convert_all(true)
 elseif cmd == "disable" then
     stop_watcher()
     smooth_inorganic_cache = nil
     S.processed_blocks     = {}
-    S.last_site_id         = nil
-    S.last_block_count     = 0
-    S.biome_cache          = {}
+    --S.last_site_id         = nil      -- SWD: removed in favor of map_changed()
+    --S.last_block_count     = 0        -- SWD: removed in favor of map_changed()
+    S.biome_cache          = {}         -- SWD: removed.
 elseif cmd == "status" then
     local n = 0; for _ in pairs(smooth_stone_wall_by_suffix) do n = n + 1 end
-    log(("watcher=%s cache=%s floor_tt=%s wall_variants=%d"):format(
+    log("watcher=%s timeout_active=%s cache=%s floor_tt=%s wall_variants=%d",
         tostring(S.watcher_enabled),
+        tostring(dfhack.timeout_active(S.current_timeout_id)),
         tostring(smooth_inorganic_cache ~= nil),
+        -- SWD: this will always, *always* be 43, StoneFloorSmooth.  df.tiletype numbers and names are *constants*.
         tostring(SMOOTH_FLOOR_TT),
-        n))
+        n)
 else
     log("Usage: ruins_smoothfloor [enable|disable|force|status]")
 end
