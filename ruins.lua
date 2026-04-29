@@ -1,5 +1,18 @@
--- ruins.lua
--- Converts fake-construction grass plants into real DFHack construction records.
+--[====[ ruins.lua
+Converts fake-construction grass plants into real DFHack construction records.
+
+Usage:
+    ruins enable
+    ruins force
+    ruins disable
+    ruins status
+    ruins debug
+    ruins debug-roads
+--]====]
+
+local getTimestamp          = dfhack.getQueryPerformanceCounter     or os.clock
+local getTimestampDivisor   = dfhack.getQueryPerformanceFrequency   or function()return 1.0;end
+local clocktime = -getTimestamp()
 
 local PLASTCRETE_TOKEN      = "INORGANIC:PLASTCRETE_ID_NULL"
 local SUPERSTRUCTURE_TOKEN  = "INORGANIC:SUPERSTRUCTURE_ID_NULL"
@@ -68,32 +81,43 @@ local FLOOR_ONLY_BIOMES = {
 
 local FLOOR_PLANT_IDS = { TILE1=true, TILE2=true, TILE3=true, TILE4=true, TILE5=true, TILE6=true }
 local WALL_PLANT_IDS  = { CONCRETE=true, CONCRETE2=true, CONCRETE3=true }
+-- SWD: note that v7.13 doesn't have a plant named CONCRETE.  Do you want CONCRETE1?
+--      also, there v7.13 has a plant named CONCRETE4, should it be in the list?
+WALL_PLANT_IDS.CONCRETE1 = true     -- SWD added
 
 local PLASTCRETE_MAT_TYPE
 local PLASTCRETE_MAT_INDEX
 local SUPERSTRUCTURE_MAT_TYPE
 local SUPERSTRUCTURE_MAT_INDEX
 
-local CONSTRUCTED_FLOOR_TT = (function()
-    local constr = df.tiletype_material.CONSTRUCTION
-    for i = 0, 65535 do
-        local attrs = df.tiletype.attrs[i]
-        if attrs and attrs.material == constr and tostring(df.tiletype[i]) == "ConstructedFloor" then
-            return i
-        end
-    end
-end)()
+local OPEN_SPACE_TT = df.tiletype.OpenSpace; assert(OPEN_SPACE_TT)
+local RAMP_TOP_TT = df.tiletype.RampTop; assert(RAMP_TOP_TT)
 
-local CONSTRUCTED_RAMP_TT = (function()
-    local constr = df.tiletype_material.CONSTRUCTION
-    for i = 0, 65535 do
-        local attrs = df.tiletype.attrs[i]
-        if attrs and attrs.material == constr and tostring(df.tiletype[i] or ""):find("^ConstructedRamp") then
-            return i
-        end
-    end
-end)()
+local CONSTRUCTED_FLOOR_TT = df.tiletype.ConstructedFloor
+--local CONSTRUCTED_FLOOR_TT = (function()
+--    local constr = df.tiletype_material.CONSTRUCTION
+--    for i = 0, 65535 do
+--        local attrs = df.tiletype.attrs[i]
+--        if attrs and attrs.material == constr and tostring(df.tiletype[i]) == "ConstructedFloor" then
+--            return i
+--        end
+--    end
+--end)()
 
+local CONSTRUCTED_RAMP_TT = df.tiletype.ConstructedRamp
+--local CONSTRUCTED_RAMP_TT = (function()
+--    local constr = df.tiletype_material.CONSTRUCTION
+--    for i = 0, 65535 do
+--        local attrs = df.tiletype.attrs[i]
+--        if attrs and attrs.material == constr and tostring(df.tiletype[i] or ""):find("^ConstructedRamp") then
+--            return i
+--        end
+--    end
+--end)()
+
+
+if false then   -- SWD: 75 milliseconds
+local runtime = -getTimestamp()
 local constructed_wall_by_suffix = (function()
     local t = {}
     local constr = df.tiletype_material.CONSTRUCTION
@@ -101,7 +125,7 @@ local constructed_wall_by_suffix = (function()
         local name  = df.tiletype[i]
         local attrs = df.tiletype.attrs[i]
         if name and attrs and attrs.material == constr then
-		
+            -- SWD: oh dear.  Walls can have the digit '2' in their tile names.  Only the digit '2'.
             local raw = tostring(name):match("^ConstructedWall([LRUD0-9]*)$")
             if raw ~= nil then
                 local sfx = raw:gsub("%d+", "")
@@ -111,84 +135,124 @@ local constructed_wall_by_suffix = (function()
     end
     return t
 end)()
+runtime = (runtime + getTimestamp()) / getTimestampDivisor()
+print(string.format("OLD constructed_wall_by_suffix runtime: %0.6f seconds", runtime))
+end
 
-local CONSTRUCTED_WALL_TT = constructed_wall_by_suffix["LRUD"]
-    or constructed_wall_by_suffix[""]
-
-local CONSTRUCTED_PILLAR_TT = (function()
-    local constr = df.tiletype_material.CONSTRUCTION
-    for i = 0, 65535 do
-        local attrs = df.tiletype.attrs[i]
-        if attrs and attrs.material == constr and tostring(df.tiletype[i]) == "ConstructedPillar" then
-            return i
-        end
-    end
-end)()
-
-local CONSTRUCTED_STAIR_UD_TT = (function()
-    local constr         = df.tiletype_material.CONSTRUCTION
-    local stair_ud_shape = df.tiletype_shape.STAIR_UPDOWN
-    for i = df.tiletype._first_item, df.tiletype._last_item do
-        local attrs = df.tiletype.attrs[i]
-        local name  = df.tiletype[i]
-        if attrs and name and attrs.material == constr then
-            if stair_ud_shape and attrs.shape == stair_ud_shape then return i end
-            local s = tostring(name):lower()
-            if s:find("stair") and (s:find("updown") or s:find("ud") or (s:find("up") and s:find("down"))) then
-                return i
+--local runtime = -getQueryPerformanceCounter()
+local constructed_wall_by_suffix = {}
+do  -- SWD: a quarter of a millisecond, a 300x speedup.
+    local table = constructed_wall_by_suffix
+    for _,L in ipairs{'', 'L', 'L2'} do
+        for _,R in ipairs{'', 'R', 'R2'} do
+            for _,U in ipairs{'', 'U', 'U2'} do
+                for _,D in ipairs{'', 'D', 'D2'} do
+                    local suffix = L .. R .. U .. D
+                    local name = "ConstructedWall" .. suffix
+                    local num = df.tiletype[name]
+                    if num then
+                        table[suffix] = num
+                        table[name] = num
+                        table[num] = true
+                    end
+                end
             end
         end
     end
-end)()
+end
+-- Suffixes with no matching tiletype (single-connection stubs) become pillars.
+for _,suffix in ipairs{'', 'L', 'R', 'U', 'D'} do
+    constructed_wall_by_suffix[suffix] = df.tiletype.ConstructedPillar
+end
+--runtime = (runtime + getQueryPerformanceCounter()) / getQueryPerformanceFrequency()
+--print(string.format("NEW constructed_wall_by_suffix runtime: %0.6f seconds", runtime))
 
-local CONSTRUCTED_STAIR_UP_TT = (function()
-    local constr = df.tiletype_material.CONSTRUCTION
-    local shape  = df.tiletype_shape and df.tiletype_shape.STAIR_UP
-    for i = df.tiletype._first_item, df.tiletype._last_item do
-        local attrs = df.tiletype.attrs[i]
-        local name  = df.tiletype[i]
-        if attrs and name and attrs.material == constr then
-            if shape and attrs.shape == shape then return i end
-            if tostring(name) == "ConstructedStairUp" then return i end
-        end
-    end
-end)()
 
-local CONSTRUCTED_STAIR_DOWN_TT = (function()
-    local constr = df.tiletype_material.CONSTRUCTION
-    local shape  = df.tiletype_shape and df.tiletype_shape.STAIR_DOWN
-    for i = df.tiletype._first_item, df.tiletype._last_item do
-        local attrs = df.tiletype.attrs[i]
-        local name  = df.tiletype[i]
-        if attrs and name and attrs.material == constr then
-            if shape and attrs.shape == shape then return i end
-            if tostring(name) == "ConstructedStairDown" then return i end
-        end
-    end
-end)()
+--local CONSTRUCTED_WALL_TT = constructed_wall_by_suffix["LRUD"]
+--    or constructed_wall_by_suffix[""]
+local CONSTRUCTED_WALL_TT = df.tiletype.ConstructedWallLRUD
 
-local CONSTRUCTED_FORTIFICATION_TT = (function()
-    local constr = df.tiletype_material.CONSTRUCTION
-    for i = 0, 65535 do
-        local attrs = df.tiletype.attrs[i]
-        if attrs and attrs.material == constr
-           and tostring(df.tiletype[i]) == "ConstructedFortification" then
-            return i
-        end
-    end
-end)()
+--local CONSTRUCTED_PILLAR_TT = (function()
+--    local constr = df.tiletype_material.CONSTRUCTION
+--    for i = 0, 65535 do
+--        local attrs = df.tiletype.attrs[i]
+--        if attrs and attrs.material == constr and tostring(df.tiletype[i]) == "ConstructedPillar" then
+--            return i
+--        end
+--    end
+--end)()
+local CONSTRUCTED_PILLAR_TT = df.tiletype.ConstructedPillar
 
-local SOIL_FLOOR_TT = (function()
-    for i = 0, 65535 do
-        if tostring(df.tiletype[i]) == "SoilFloor1" then return i end
-    end
-end)()
+--local CONSTRUCTED_STAIR_UD_TT = (function()
+--    local constr         = df.tiletype_material.CONSTRUCTION
+--    local stair_ud_shape = df.tiletype_shape.STAIR_UPDOWN
+--    for i = df.tiletype._first_item, df.tiletype._last_item do
+--        local attrs = df.tiletype.attrs[i]
+--        local name  = df.tiletype[i]
+--        if attrs and name and attrs.material == constr then
+--            if stair_ud_shape and attrs.shape == stair_ud_shape then return i end
+--            local s = tostring(name):lower()
+--            if s:find("stair") and (s:find("updown") or s:find("ud") or (s:find("up") and s:find("down"))) then
+--                return i
+--            end
+--        end
+--    end
+--end)()
+local CONSTRUCTED_STAIR_UD_TT = df.tiletype.ConstructedStairUD
+
+--local CONSTRUCTED_STAIR_UP_TT = (function()
+--    local constr = df.tiletype_material.CONSTRUCTION
+--    local shape  = df.tiletype_shape and df.tiletype_shape.STAIR_UP
+--    for i = df.tiletype._first_item, df.tiletype._last_item do
+--        local attrs = df.tiletype.attrs[i]
+--        local name  = df.tiletype[i]
+--        if attrs and name and attrs.material == constr then
+--            if shape and attrs.shape == shape then return i end
+--            if tostring(name) == "ConstructedStairUp" then return i end
+--        end
+--    end
+--end)()
+local CONSTRUCTED_STAIR_UP_TT = df.tiletype.ConstructedStairU
+
+--local CONSTRUCTED_STAIR_DOWN_TT = (function()
+--    local constr = df.tiletype_material.CONSTRUCTION
+--    local shape  = df.tiletype_shape and df.tiletype_shape.STAIR_DOWN
+--    for i = df.tiletype._first_item, df.tiletype._last_item do
+--        local attrs = df.tiletype.attrs[i]
+--        local name  = df.tiletype[i]
+--        if attrs and name and attrs.material == constr then
+--            if shape and attrs.shape == shape then return i end
+--            if tostring(name) == "ConstructedStairDown" then return i end
+--        end
+--    end
+--end)()
+local CONSTRUCTED_STAIR_DOWN_TT = df.tiletype.ConstructedStairD
+
+--local CONSTRUCTED_FORTIFICATION_TT = (function()
+--    local constr = df.tiletype_material.CONSTRUCTION
+--    for i = 0, 65535 do
+--        local attrs = df.tiletype.attrs[i]
+--        if attrs and attrs.material == constr
+--           and tostring(df.tiletype[i]) == "ConstructedFortification" then
+--            return i
+--        end
+--    end
+--end)()
+local CONSTRUCTED_FORTIFICATION_TT = df.tiletype.ConstructedFortification
+
+--local SOIL_FLOOR_TT = (function()
+--    for i = 0, 65535 do
+--        if tostring(df.tiletype[i]) == "SoilFloor1" then return i end
+--    end
+--end)()
+local SOIL_FLOOR_TT = df.tiletype.SoilFloor1
 
 local function original_tile_for(tt)
     local attrs = df.tiletype.attrs[tt]
     if attrs then
         local m = attrs.material
         if m == df.tiletype_material.GRASS_DARK or m == df.tiletype_material.GRASS_LIGHT then
+            -- SWD: Q: what about GRASS_DRY and GRASS_DEAD ?
             return SOIL_FLOOR_TT or tt
         end
     end
@@ -197,13 +261,16 @@ end
 
 -- Suffixes with no matching tiletype (single-connection stubs) become pillars.
 local function wall_tt(suffix)
-    local tt = constructed_wall_by_suffix[suffix]
-    if tt then return tt end
-    return CONSTRUCTED_PILLAR_TT or CONSTRUCTED_WALL_TT
+    return constructed_wall_by_suffix[suffix]
+    -- SWD: the five special cases have been added to this table,
+    --      so this fallback code is no longer necessary.
+    --local tt = constructed_wall_by_suffix[suffix]
+    --if tt then return tt end
+    --return CONSTRUCTED_PILLAR_TT or CONSTRUCTED_WALL_TT
 end
 
 -- plant_type index → "floor" or "wall"; populated on first use.
-local plant_role_cache = nil
+local plant_role_cache = nil    ---@type table<integer, "floor"|"wall">
 
 local S = rawget(_G, "__ruins_state")
 if not S then
@@ -223,14 +290,22 @@ if not S then
     }
     _G.__ruins_state = S
 end
+S.debug = true  -- SWD: override during active development.
 
-local function log(msg)  print("[ruins] " .. msg) end
-local function dlog(msg) if S.debug then log("DIAG: " .. msg) end end
+-- ============================================================================
+-- LIBRARY FUNCTIONS
+-- ============================================================================
+
+-- SWD: string.format() moved into this function.  That's much better
+--      than requiring every caller that needs formatting to do it itself.
+local function log(msg, ...) print("[smoothfloor] " .. string.format(msg, ...)) end
+
+local function dlog(msg, ...) if S.debug then log("DIAG: " .. msg, ...) end end
 
 local function find_materials()
     local info = dfhack.matinfo.find(PLASTCRETE_TOKEN)
     if not info then
-        log(PLASTCRETE_TOKEN .. " not found in raws — ruins conversion disabled")
+        log("%s not found in raws — ruins conversion disabled", PLASTCRETE_TOKEN)
         return false
     end
     PLASTCRETE_MAT_TYPE  = info.type
@@ -240,7 +315,7 @@ local function find_materials()
         SUPERSTRUCTURE_MAT_TYPE  = sinfo.type
         SUPERSTRUCTURE_MAT_INDEX = sinfo.index
     else
-        log(SUPERSTRUCTURE_TOKEN .. " not found — mountain/forest ruins will use plastcrete")
+        log("%s not found — mountain/forest ruins will use plastcrete", SUPERSTRUCTURE_TOKEN)
         SUPERSTRUCTURE_MAT_TYPE  = PLASTCRETE_MAT_TYPE
         SUPERSTRUCTURE_MAT_INDEX = PLASTCRETE_MAT_INDEX
     end
@@ -261,25 +336,40 @@ local function build_plant_cache()
             walls = walls + 1
         end
     end
-    dlog(("plant cache built: floor_species=%d wall_species=%d"):format(floors, walls))
+    dlog("plant cache built: floor_species=%d wall_species=%d", floors, walls)
 end
 
+--------------------------------------------------------------------------------
+---@class key_xyz
+---@field value unknown
+
+--------------------------------------------------------------------------------
+---@param x integer
+---@param y integer
+---@param z integer
+---@return key_xyz
 local function key_xyz(x, y, z)
+    ---@diagnostic disable-next-line: return-type-mismatch
     return ("%d,%d,%d"):format(x, y, z)
 end
 
--- Build a Lua table from a block list for O(1) block lookups without C++ calls.
-local function make_block_map(block_list)
-    local m = {}
-    for _, block in ipairs(block_list) do
-        m[block.map_pos.x .. "," .. block.map_pos.y .. "," .. block.map_pos.z] = block
-    end
-    return m
-end
+-- SWD: disabled.
+---- Build a Lua table from a block list for O(1) block lookups without C++ calls.
+--local function make_block_map(block_list)
+--    local m = {}
+--    for _, block in ipairs(block_list) do
+--        m[block.map_pos.x .. "," .. block.map_pos.y .. "," .. block.map_pos.z] = block
+--    end
+--    return m
+--end
 
-local function block_from_map(bmap, wx, wy, wz)
-    return bmap[(wx - wx % 16) .. "," .. (wy - wy % 16) .. "," .. wz]
-end
+--local function block_from_map(bmap, wx, wy, wz)
+--      dfhack.maps.getTileBlock() is lightning fast compared to this,
+--      even before factoring in the time to digest 10000 blocks into
+--      the block_list.  in short, don't do it this way.
+-- SWD: disabled.
+--    return bmap[(wx - wx % 16) .. "," .. (wy - wy % 16) .. "," .. wz]
+--end
 
 local function is_player_map()
     if dfhack.world.isFortressMode and dfhack.world.isFortressMode() then return true end
@@ -291,7 +381,7 @@ local function is_player_map()
 end
 
 -- prevents roads from being built over
-local ROAD_OTHER_KEYS = {
+local ROAD_KEYS = {
     "ZONE_ROAD_CENTER",
     "ZONE_ROAD_EXIT_NORTH",
     "ZONE_ROAD_EXIT_SOUTH",
@@ -299,103 +389,94 @@ local ROAD_OTHER_KEYS = {
     "ZONE_ROAD_EXIT_WEST",
 }
 
-local function build_road_set(block_map)
-    local road_set  = {}
-    local road_tiles = {}   -- flat: {x1,y1,z1, x2,y2,z2, ...}
+-- SWD rewrote all of the logic in this.
+local function build_road_set( --[[ block_map SWD disabled ]] )
     local bother    = df.global.world.buildings.other
-    local queue     = {}
+    local tested    = {}    -- key_xyz == true  -- SWD added logic to skip multiple tests on any tiles instead of just skipping road tiles.
+    local road_set  = {}    -- key_xyz == true
+    local road_tiles= {}    -- flat: {x1,y1,z1, x2,y2,z2, ...}
+    local queue     = {}    -- flat: {x1,y1,z1, x2,y2,z2, ...}  SWD converted this to flat array for speed
 
     local function seed(b)
-        if not b or not b.x1 then return end
+        --dlog("road seed %d,%d,%d", b.x1, b.y1, b.z)
         for rx = b.x1, b.x2 do
             for ry = b.y1, b.y2 do
-                local k = key_xyz(rx, ry, b.z)
-                if not road_set[k] then
-                    road_set[k] = true
-                    local n = #road_tiles
-                    road_tiles[n+1] = rx; road_tiles[n+2] = ry; road_tiles[n+3] = b.z
-                    queue[#queue + 1] = {rx, ry, b.z}
-                end
+                table.insert(queue, rx); table.insert(queue, ry); table.insert(queue, b.z)
             end
         end
     end
 
-    for _, key in ipairs(ROAD_OTHER_KEYS) do
+    for _, key in ipairs(ROAD_KEYS) do
         local vec = bother[key]
         if vec then for _, b in ipairs(vec) do seed(b) end end
     end
     local any_road = bother.ANY_ROAD
     if any_road then for _, b in ipairs(any_road) do seed(b) end end
 
+    local DF_tiletype_shape_FLOOR = df.tiletype_shape.FLOOR
+    local DF_tiletype_shape_RAMP = df.tiletype_shape.RAMP
+    local DF_tiletype_shape_RAMP_TOP = df.tiletype_shape.RAMP_TOP
     local dx = {-1, 1,  0, 0}
     local dy = { 0, 0, -1, 1}
     local i = 1
     while i <= #queue do
-        local pos = queue[i]; i = i + 1
-        local x, y, z = pos[1], pos[2], pos[3]
-        local lx, ly = x % 16, y % 16
-        for d = 1, 4 do
-            local nx, ny = x + dx[d], y + dy[d]
-            local k = key_xyz(nx, ny, z)
-            if not road_set[k] then
-                local block = block_map and block_from_map(block_map, nx, ny, z)
-                              or dfhack.maps.getTileBlock(nx, ny, z)
-                if block then
-                    local occ = block.occupancy[nx % 16][ny % 16]
-                    if occ.no_grow and occ.building == 0 then
-                        road_set[k] = true
-                        local n = #road_tiles
-                        road_tiles[n+1] = nx; road_tiles[n+2] = ny; road_tiles[n+3] = z
-                        queue[#queue + 1] = {nx, ny, z}
+        -- probe this tile; if it is a road, record it and queue up the tiles around it.
+        local x, y, z = queue[i], queue[i+1], queue[i+2]; i = i + 3
+        local key = key_xyz(x, y, z)
+        if tested[key] then goto continue end
+        tested[key] = true
+        local tt = dfhack.maps.getTileType(x, y, z) or OPEN_SPACE_TT
+        local shape = df.tiletype.attrs[tt].shape
+
+        -- only floors and ramps can be roads, but see below.
+        if shape == DF_tiletype_shape_FLOOR or shape == DF_tiletype_shape_RAMP then
+            local des, occ = dfhack.maps.getTileFlags(x, y, z)            
+            if occ.no_grow and occ.building == 0 then
+                road_set[key] = true
+                table.insert(road_tiles, x); table.insert(road_tiles, y); table.insert(road_tiles, z)
+                -- and queue up the orthoganal tiles to be tested.
+                for d = 1, 4 do
+                    local nx, ny = x + dx[d], y + dy[d]
+                    local k = key_xyz(nx, ny, z)
+                    if not tested[k] then
+                        table.insert(queue, nx); table.insert(queue, ny); table.insert(queue, z)
                     end
                 end
             end
         end
-		
-        local cur_block = block_map and block_from_map(block_map, x, y, z)
-                          or dfhack.maps.getTileBlock(x, y, z)
-        if cur_block then
-            local cur_attrs = df.tiletype.attrs[cur_block.tiletype[lx][ly]]
-            local cur_shape = cur_attrs and df.tiletype_shape.attrs[cur_attrs.shape]
-            if cur_shape and cur_shape.basic_shape == df.tiletype_shape_basic.Ramp then
-                local k_up = key_xyz(x, y, z + 1)
-                if not road_set[k_up] then
-                    local block_up = block_map and block_from_map(block_map, x, y, z + 1)
-                                     or dfhack.maps.getTileBlock(x, y, z + 1)
-                    if block_up then
-                        local occ_up = block_up.occupancy[lx][ly]
-                        if occ_up.no_grow and occ_up.building == 0 then
-                            road_set[k_up] = true
-                            local n = #road_tiles
-                            road_tiles[n+1] = x; road_tiles[n+2] = y; road_tiles[n+3] = z + 1
-                            queue[#queue + 1] = {x, y, z + 1}
-                        end
+        -- for road ramps, check if the tile above is a ramp top, meaning this ramp usable.
+        --   if so, mark the ramp top as tested and road, and also queue up its orthoganal tiles.
+        if shape == DF_tiletype_shape_RAMP and road_set[key] then
+            local zup = z + 1
+            local keyup = key_xyz(x, y, zup)
+            local ttup = dfhack.maps.getTileType(x, y, zup) or OPEN_SPACE_TT
+            local shapeup = df.tiletype.attrs[ttup].shape
+            if shapeup == DF_tiletype_shape_RAMP_TOP then
+                tested[keyup] = true
+                road_set[keyup] = true
+                table.insert(road_tiles, x); table.insert(road_tiles, y); table.insert(road_tiles, zup)
+                -- queue up the orthoganal tiles to be tested.
+                for d = 1, 4 do
+                    local nx, ny = x + dx[d], y + dy[d]
+                    local k = key_xyz(nx, ny, zup)
+                    if not tested[k] then
+                        table.insert(queue, nx); table.insert(queue, ny); table.insert(queue, zup)
                     end
                 end
             end
         end
-		
-        local k_dn = key_xyz(x, y, z - 1)
-        if not road_set[k_dn] then
-            local block_dn = block_map and block_from_map(block_map, x, y, z - 1)
-                             or dfhack.maps.getTileBlock(x, y, z - 1)
-            if block_dn then
-                local dn_attrs = df.tiletype.attrs[block_dn.tiletype[lx][ly]]
-                local dn_shape = dn_attrs and df.tiletype_shape.attrs[dn_attrs.shape]
-                if dn_shape and dn_shape.basic_shape == df.tiletype_shape_basic.Ramp then
-                    local occ_dn = block_dn.occupancy[lx][ly]
-                    if occ_dn.no_grow and occ_dn.building == 0 then
-                        road_set[k_dn] = true
-                        local n = #road_tiles
-                        road_tiles[n+1] = x; road_tiles[n+2] = y; road_tiles[n+3] = z - 1
-                        queue[#queue + 1] = {x, y, z - 1}
-                    end
-                end
+        -- if it's a ramp top, queue up the ramp tile directly below.
+        if shape == DF_tiletype_shape_RAMP_TOP then
+            local keydown = key_xyz(x, y, z - 1)
+            if not tested[keydown] then
+                table.insert(queue, x); table.insert(queue, y); table.insert(queue, z - 1)
+                -- the tile below will determine whether this tile is flagged as road.
             end
         end
+        ::continue::
     end
 
-    dlog(("road_set built: %d tiles"):format(#road_tiles / 3))
+    dlog("road_set built: %d tiles, tested %d tiles", #road_tiles / 3, #queue / 3)
     return road_set, road_tiles
 end
 
@@ -403,10 +484,10 @@ end
 local function build_existing_set()
     local existing = {}
     local constructions = df.global.world.event.constructions
-    for i = 0, #constructions - 1 do
-        local c = constructions[i]
+    for i,c in ipairs(constructions) do
         existing[key_xyz(c.pos.x, c.pos.y, c.pos.z)] = true
     end
+    dlog("existing set built: %d tiles", #constructions)
     return existing
 end
 
@@ -495,7 +576,8 @@ local function collect_wall_positions(block_list)
     for _, block in ipairs(block_list) do
         for _, ev in ipairs(block.block_events) do
             if getmetatable(ev) == "block_square_event_grassst"
-               and plant_role_cache[ev.plant_index] == "wall" then
+                ---@cast ev df.block_square_event_grassst
+                    and plant_role_cache[ev.plant_index] == "wall" then
                 for lx = 0, 15 do
                     for ly = 0, 15 do
                         if ev.amount[lx][ly] > 0 then
@@ -518,7 +600,7 @@ local function is_wall_neighbour(wx, wy, wz, wall_set)
     if wall_set[key_xyz(wx, wy, wz)] then return true end
     local block = dfhack.maps.getTileBlock(wx, wy, wz)
     if block then
-        local name = tostring(df.tiletype[block.tiletype[wx % 16][wy % 16]] or "")
+        local name = df.tiletype[block.tiletype[wx % 16][wy % 16]] or ""
         if name:find("^ConstructedWall") or name:find("^ConstructedPillar") then return true end
     end
     return false
@@ -562,6 +644,7 @@ end
 local function zero_grass_at(block, lx, ly)
     for _, ev in ipairs(block.block_events) do
         if getmetatable(ev) == "block_square_event_grassst" then
+            ---@cast ev df.block_square_event_grassst
             ev.amount[lx][ly] = 0
         end
     end
@@ -816,6 +899,7 @@ local function scan_block(block, existing, wall_set, in_site, road_set)
 
     for _, ev in ipairs(block.block_events) do
         if getmetatable(ev) == "block_square_event_grassst" then
+            ---@cast ev df.block_square_event_grassst
             local role = plant_role_cache[ev.plant_index]
             if role then
                 for lx = 0, 15 do
@@ -831,14 +915,15 @@ local function scan_block(block, existing, wall_set, in_site, road_set)
                             local in_site_force_floor = false
                             if in_site and role == "wall" then
                                 local tt_attrs   = df.tiletype.attrs[block.tiletype[lx][ly]]
-                                local shape_attr = tt_attrs and df.tiletype_shape.attrs[tt_attrs.shape]
-                                local basic      = shape_attr and shape_attr.basic_shape
+                                local shape      = tt_attrs and df.tiletype_shape.attrs[tt_attrs.shape]
+                                local basic      = shape and shape.basic_shape
                                 if existing[k]
-                                   or basic == df.tiletype_shape_basic.Wall
-                                   or basic == df.tiletype_shape_basic.Fortification
-                                   or block.occupancy[lx][ly].no_grow
-                                   or not block.designation[lx][ly].outside
-                                   or dfhack.buildings.findAtTile(wx, wy, wz) then
+                                    or basic == df.tiletype_shape_basic.Wall
+                                    -- or basic == df.tiletype_shape_basic.Fortification    -- SWD: there is NO tiletype_shape_basic key named Fortification
+                                    or shape == df.tiletype_shape.FORTIFICATION             -- SWD: fixed.  there IS a tiletype_shape.FORTIFICATION
+                                    or block.occupancy[lx][ly].no_grow
+                                    or not block.designation[lx][ly].outside
+                                    or dfhack.buildings.findAtTile(wx, wy, wz) then
                                     ev.amount[lx][ly] = 0
                                     in_site_excluded = true
                                 elseif has_adjacent_door(wx, wy, wz) then
@@ -976,17 +1061,30 @@ local function convert_ruins(force)
     end
 
     local all_blocks = df.global.world.map.map_blocks
-    local block_map  = make_block_map(all_blocks)
+    --local block_map  = make_block_map(all_blocks)     -- SWD disabled
     local in_site    = is_npc_site()
 
     -- Pass 1: collect CONCRETE wall positions for wall-suffix computation.
+    local runtime = -getTimestamp()
     local wall_set = collect_wall_positions(all_blocks)
+    runtime = (runtime + getTimestamp()) / getTimestampDivisor()
+    dlog("pass 1 collect_wall_positions runtime: %0.3f seconds", runtime)
+    dlog("pass 1 #wall_set = %d", (function(t)local c=0;for _ in pairs(t)do c=c+1;end;return c;end)(wall_set))
 
     -- Pass 2: build road set 
+    runtime = -getTimestamp()
     local existing  = build_existing_set()
-    local road_set  = build_road_set(block_map)
+    runtime = (runtime + getTimestamp()) / getTimestampDivisor()
+    dlog("pass 2a build_existing_set runtime: %0.3f seconds", runtime)
+    --dlog("pass 2a #existing = %d", (function(t)local c=0;for _ in pairs(t)do c=c+1;end;return c;end)(existing))
+    runtime = -getTimestamp()
+    local road_set  = build_road_set( --[[ block_map SWD disabled ]] )
+    runtime = (runtime + getTimestamp()) / getTimestampDivisor()
+    dlog("pass 2b build_road_set runtime: %0.3f seconds", runtime)
+    --dlog("pass 2b #road_set = %d", (function(t)local c=0;for _ in pairs(t)do c=c+1;end;return c;end)(road_set))
 
     -- Pass 3: convert unprocessed ruins blocks.
+    runtime = -getTimestamp()
     local tf, tw, tu = 0, 0, 0
     for _, block in ipairs(all_blocks) do
         local bk = ("%d,%d,%d"):format(block.map_pos.x, block.map_pos.y, block.map_pos.z)
@@ -996,9 +1094,11 @@ local function convert_ruins(force)
             tf = tf + f; tw = tw + w; tu = tu + u
         end
     end
+    runtime = (runtime + getTimestamp()) / getTimestampDivisor()
+    dlog("pass3 scan_block runtime: %0.3f seconds", runtime)
 
     if tf + tw > 0 then
-        log(("Converted ruins: floors=%d walls=%d uppers=%d"):format(tf, tw, tu))
+        log("Converted ruins: floors=%d walls=%d uppers=%d", tf, tw, tu)
     end
 end
 
@@ -1027,11 +1127,11 @@ local function scan_nearby()
         end
     end
 
-    local block_map             = make_block_map(nearby_blocks)
+    --local block_map             = make_block_map(nearby_blocks)   -- SWD disabled
     local in_site               = is_npc_site()
     local wall_set              = collect_wall_positions(nearby_blocks)
     local existing  = build_existing_set()
-    local road_set  = build_road_set(block_map)
+    local road_set  = build_road_set( --[[ block_map SWD disabled ]] )
 
     --  scan all nearby blocks 
     local floors, walls, uppers = 0, 0, 0
@@ -1043,7 +1143,7 @@ local function scan_nearby()
     end
 
     if floors + walls > 0 then
-        log(("scan_nearby: floors=%d walls=%d uppers=%d"):format(floors, walls, uppers))
+        dlog("scan_nearby: floors=%d walls=%d uppers=%d", floors, walls, uppers)
     end
 
     S.last_scan_x = cx
@@ -1088,6 +1188,9 @@ local function schedule_initial()
     end)
 end
 
+clocktime = (clocktime + getTimestamp()) / getTimestampDivisor()
+dlog("startup clocktime: %0.6f seconds", clocktime)
+
 local args = { ... }
 local cmd  = args[1] or "enable"
 
@@ -1096,69 +1199,73 @@ if cmd == "enable" then
     start_watcher()
     schedule_initial()
 elseif cmd == "force" then
+    local clocktime = -getTimestamp()
     convert_ruins(true)
+    clocktime = (clocktime + getTimestamp()) / getTimestampDivisor()
+    dlog("force clocktime: %0.3f seconds", clocktime)
 elseif cmd == "disable" then
     S.init_gen = S.init_gen + 1
     stop_watcher()
     S.processed_blocks = {}
     S.last_site_id = nil
 elseif cmd == "status" then
-    log(("watcher=%s mat_found=%s floor_tt=%s wall_tt=%s stair_ud_tt=%s fort_tt=%s"):format(
+    log("watcher=%s mat_found=%s floor_tt=%s wall_tt=%s stair_ud_tt=%s fort_tt=%s",
         tostring(S.watcher_enabled),
         tostring(PLASTCRETE_MAT_TYPE ~= nil),
         tostring(CONSTRUCTED_FLOOR_TT),
         tostring(CONSTRUCTED_WALL_TT),
         tostring(CONSTRUCTED_STAIR_UD_TT),
-        tostring(CONSTRUCTED_FORTIFICATION_TT)))
+        tostring(CONSTRUCTED_FORTIFICATION_TT))
 elseif cmd == "debug" then
     S.debug = not S.debug
-    log("Debug " .. (S.debug and "ON" or "OFF"))
+    log("Debug %s", (S.debug and "ON" or "OFF"))
 elseif cmd == "debug-roads" then
     -- Diagnostic: report what road-related buildings/data are visible from Lua.
     local bother = df.global.world.buildings.other
-    for _, key in ipairs(ROAD_OTHER_KEYS) do
+    for _, key in ipairs(ROAD_KEYS) do
         local vec = bother[key]
         local n = vec and #vec or -1
-        log(("ZONE %s: %d buildings"):format(key, n))
+        log("ZONE %s: %d buildings", key, n)
         if vec and n > 0 then
             for i = 0, math.min(2, n - 1) do
                 local b = vec[i]
-                log(("  [%d] x=%d..%d y=%d..%d z=%d"):format(i, b.x1, b.x2, b.y1, b.y2, b.z))
+                log("  [%d] x=%d..%d y=%d..%d z=%d", i, b.x1, b.x2, b.y1, b.y2, b.z)
             end
         end
     end
     local any_road = bother.ANY_ROAD
-    log(("ANY_ROAD: %d buildings"):format(any_road and #any_road or -1))
+    log("ANY_ROAD: %d buildings", any_road and #any_road or -1)
     -- Report road_set tile count
     local road_set = build_road_set()
     local n = 0; for _ in pairs(road_set) do n = n + 1 end
-    log(("road_set total tiles: %d"):format(n))
+    log("road_set total tiles: %d", n)
     -- Report adventurer tile details
     local adv = dfhack.world and dfhack.world.getAdventurer and dfhack.world.getAdventurer()
     if adv and adv.pos then
         local wx, wy, wz = adv.pos.x, adv.pos.y, adv.pos.z
-        log(("Adventurer at %d,%d,%d — in road_set: %s"):format(
-            wx, wy, wz, tostring(road_set[key_xyz(wx, wy, wz)] == true)))
+        log("Adventurer at %d,%d,%d — in road_set: %s",
+            wx, wy, wz, tostring(road_set[key_xyz(wx, wy, wz)] == true))
         local block = dfhack.maps.getTileBlock(wx, wy, wz)
         if block then
             local lx, ly = wx % 16, wy % 16
             local occ    = block.occupancy[lx][ly]
             local tt     = block.tiletype[lx][ly]
             local attrs  = df.tiletype.attrs[tt]
-            log(("  tiletype=%s material=%s"):format(
+            log("  tiletype=%s material=%s",
                 tostring(df.tiletype[tt]),
-                attrs and tostring(df.tiletype_material[attrs.material]) or "?"))
-            log(("  occupancy.building=%s no_grow=%s"):format(
-                tostring(occ.building), tostring(occ.no_grow)))
+                attrs and tostring(df.tiletype_material[attrs.material]) or "?")
+            log("  occupancy.building=%s no_grow=%s",
+                tostring(occ.building), tostring(occ.no_grow))
         end
         local bld = dfhack.buildings.findAtTile(wx, wy, wz)
-        log(("  findAtTile: %s"):format(
-            bld and tostring(df.building_type[bld:getType()]) or "nil"))
+        log("  findAtTile: %s",
+            bld and tostring(df.building_type[bld:getType()]) or "nil")
+        ---@diagnostic disable-next-line: missing-fields
         local zones = dfhack.buildings.findCivzonesAt({x=wx, y=wy, z=wz})
         if zones and #zones > 0 then
             for _, z in ipairs(zones) do
-                log(("  findCivzonesAt: civzone_type=%s"):format(
-                    tostring(df.civzone_type[z.type])))
+                log("  findCivzonesAt: civzone_type=%s",
+                    tostring(df.civzone_type[z.type]))
             end
         else
             log("  findCivzonesAt: none")
