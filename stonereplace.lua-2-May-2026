@@ -22,7 +22,7 @@ local SCAN_RADIUS         = 96
 local PLACEHOLDER_MAT_TYPE  = 0
 local PLACEHOLDER_MAT_INDEX = -1
 
-local TARGET_ID = "INORGANIC:PLASTCRETE_ID_NULL"
+local TARGET_ID = "MARBLE"
 
 local S = rawget(_G, "__stonereplace_state")
 if not S then
@@ -171,17 +171,6 @@ end
 ---------------------------------------------------------------------------
 -- ARGUMENT PARSING
 ---------------------------------------------------------------------------
-
-do
-S.target_mat = nil
-S.scan_cursor = 0
-local runtime = -dfhack.getQueryPerformanceCounter()
-run_replacement(false)
-runtime = runtime + dfhack.getQueryPerformanceCounter()
-runtime = 1.0 * runtime / dfhack.getQueryPerformanceFrequency()
-print(string.format("stonereplace.lua 'force' runtime %0.9f seconds.", runtime))
-return
-end
 
 local args    = { ... }
 local command = args[1] or "enable"

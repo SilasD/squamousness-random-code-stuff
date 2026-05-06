@@ -1,0 +1,87 @@
+-- stonereplace.lua
+-- replaces the generic INORGANIC:NONE placeholder material on
+-- site-generated buildings (roads, monastery walls/floors, town constructions)
+-- with PLASTCRETE_ID_NULL.
+--
+-- Runs automatically on map load via ln_autoload.
+--   stonereplace enable     
+--   stonereplace disable     
+--   stonereplace status      
+
+---------------------------------------------------------------------------
+-- CORE LOGIC
+---------------------------------------------------------------------------
+
+-- The placeholder is mat_type=0, mat_index=-1 ("inorganic, no specific stone").
+local PLACEHOLDER_MAT_TYPE  = 0
+local PLACEHOLDER_MAT_INDEX = -1
+
+local TARGET_ID = "PLASTCRETE_ID_NULL"
+
+local function find_target_index()
+    for i, raw in ipairs(df.global.world.raws.inorganics.all) do
+        if raw.id == TARGET_ID then
+            return i
+        end
+    end
+    return nil
+end
+
+local function run_replacement()
+    local target_idx = find_target_index()
+    if target_idx == nil then
+        dfhack.printerr(("[stonereplace] %s not found in loaded raws."):format(TARGET_ID))
+        return
+    end
+    print(("[stonereplace] Target: %s at raws index %d"):format(TARGET_ID, target_idx))
+
+    local count = 0
+    local constructions = df.global.world.event.constructions
+
+    for i = 0, #constructions - 1 do
+        local c = constructions[i]
+        if c.mat_type == PLACEHOLDER_MAT_TYPE and c.mat_index == PLACEHOLDER_MAT_INDEX then
+            c.mat_index = target_idx
+            c.item_type = df.item_type.BLOCKS
+            count = count + 1
+        end
+    end
+
+    print(("[stonereplace] Replaced %d constructions."):format(count))
+end
+
+---------------------------------------------------------------------------
+-- ENABLE / DISABLE / STATUS
+---------------------------------------------------------------------------
+
+local function enable()
+    print("[stonereplace] Running stone replacement...")
+    run_replacement()
+end
+
+local function disable()
+    print("[stonereplace] Disabled (no-op)")
+end
+
+local function status()
+    local target_idx = find_target_index()
+    print(("[stonereplace] Placeholder: mat_type=%d, mat_index=%d"):format(PLACEHOLDER_MAT_TYPE, PLACEHOLDER_MAT_INDEX))
+    print(("[stonereplace] Target: %s — %s"):format(TARGET_ID, target_idx and ("index " .. target_idx) or "NOT FOUND"))
+end
+
+---------------------------------------------------------------------------
+-- ARGUMENT PARSING
+---------------------------------------------------------------------------
+
+local args = { ... }
+local command = args[1] or "enable"
+
+if command == "enable" then
+    enable()
+elseif command == "disable" then
+    disable()
+elseif command == "status" then
+    status()
+else
+    print("[stonereplace] Usage: stonereplace [enable|disable|status]")
+end
