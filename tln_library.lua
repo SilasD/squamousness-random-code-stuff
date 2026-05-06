@@ -14,10 +14,10 @@ local on_timers, off_timers, paused_timers = {}, {}, {}
 
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@return integer
-getTimestamp          = dfhack . getQueryPerformanceCounter     or os.clock
+getTimestamp          = dfhack.getQueryPerformanceCounter     or os.clock
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@return number
-getTimestampDivisor   = dfhack . getQueryPerformanceFrequency   or function()return 1.0;end
+getTimestampDivisor   = dfhack.getQueryPerformanceFrequency   or function() return 1.0; end
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@param key string
 function timer_on(key)
@@ -420,7 +420,7 @@ function add_construction_to_tile(x, y, z, shape, mat_type, mat_index, override_
     else
         dlog("add_construction_to_tile: insert construction FAILED at (%d, %d, %d)! construction orphaned.", x, y, z)
         stat("add_construction_to_tile: insert construction FAILED")
-        construction:delete()
+        --construction:delete()
     end
     return construction
 end
