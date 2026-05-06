@@ -16,6 +16,28 @@ local SMOOTH_ID_PREFIXES = {
     { prefix = "BASIC_MACHINERY_",  cfg = { floor=true, wall=false } },
 }
 
+--[[
+SWD: just by the way, I was looking for BASIC_MACHINERY_.* in your raws,
+and I noticed that a lot of inorganics that look like they should be
+stone don't have the [IS_STONE] token.  for example, the second material:
+
+[USE_MATERIAL_TEMPLATE:STONE_TEMPLATE]
+[STONE_NAME:basic machinery scrap ID-MT40-EC15-CS31]
+[STATE_NAME_ADJ:ALL_SOLID:basic machinery ID-MT40-EC15-CS31]
+[MATERIAL_VALUE:28]
+[DISPLAY_COLOR:0:0:1]
+[TILE:15]
+[SOLID_DENSITY:4100]
+[MELTING_POINT:11485]
+[METAL_ORE:ALLOY:40]
+[METAL_ORE:ENERGETIC_COMPOUND:15]
+[METAL_ORE:COMPUTING_SUBSTRATE:31][REACTION_CLASS:MACHINERY]
+[METAMORPHIC][SEDIMENTARY]
+[INORGANIC:N_MASS_ID_NM94]
+
+I'm not sure if that's intentional.  Just bringing it up.
+--]]
+
 -- ============================================================================
 -- TILETYPE CONSTANTS
 -- ============================================================================
@@ -24,12 +46,24 @@ local STONE_MAT        = df.tiletype_material.STONE
 local LAVA_STONE_MAT   = df.tiletype_material.LAVA_STONE
 local MINERAL_MAT      = df.tiletype_material.MINERAL
 local SHAPE_WALL       = df.tiletype_shape.WALL
-local SHAPE_OPEN_SPACE = df.tiletype_shape.OPEN_SPACE or -1
+local SHAPE_OPEN_SPACE = df.tiletype_shape.OPEN_SPACE or -1         -- SWD: you *really* need to check that these things exist.
+                                                                    --  you either need df.tiletype.OpenSpace or df.tiletype_shape.EMPTY
+                                                                    -- SWD: it is really simple to check.  have DF running with the console window open,
+                                                                    --  (Windows: use the show command, or configure it to always show on startup in
+                                                                    --  the Ctrl-Shift-E control panel, Preferences tab, Hide console on startup, set false.
+                                                                    --
+                                                                    -- then you can use the `lua` command and run Lua statements like
+                                                                    --      print(df.tiletype_shape.OPEN_SPACE)
+                                                                    --  or use the shortcuts ! ~ @ ^
+                                                                    --  which call print, printall, printall_ipairs, and printall_recurse respectively.
+                                                                    --      !df.tiletype_shape.OPEN_SPACE       -- check for existance
+                                                                    --      @df.tiletype_shape                  -- show all valid enum numbers and names.
 local SPECIAL_SMOOTH   = df.tiletype_special.SMOOTH
 local BASIC_FLOOR      = df.tiletype_shape_basic.Floor
-local BASIC_PEBBLE     = df.tiletype_shape_basic.Pebble
-local BASIC_BOULDER    = df.tiletype_shape_basic.Boulder
-
+local BASIC_PEBBLE     = df.tiletype_shape_basic.Pebble             -- SWD: this does not exist.  try df.tiletype_shape.PEBBLES
+local BASIC_BOULDER    = df.tiletype_shape_basic.Boulder            -- SWD: this does not exist.  try df.tiletype_shape.BOULDER
+                                                                    -- SWD: these are the only basic shapes: Open, Floor, Ramp, Wall, Stair.
+                                                                    --  list them at the lua prompt, @df.tiletype_shape_basic
 local SMOOTH_FLOOR_TT      = df.tiletype.StoneFloorSmooth
 local SMOOTH_LAVA_FLOOR_TT = df.tiletype.LavaFloorSmooth
 
@@ -50,9 +84,9 @@ for _, pair in ipairs{ {"Stone", smooth_stone_wall_by_suffix}, {"Lava", smooth_l
     end end end end
 end
 
-if next(smooth_lava_wall_by_suffix) == nil then
-    smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix
-    smooth_lava_wall_fallback  = smooth_stone_wall_fallback
+if next(smooth_lava_wall_by_suffix) == nil then                     -- SWD: this should not be necessary.
+    smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix        --  once you have lava stone working, it will always work.
+    smooth_lava_wall_fallback  = smooth_stone_wall_fallback         --  tiletypes are *constants*, they will not change.
 end
 
 for _, i in pairs(smooth_stone_wall_by_suffix) do smooth_stone_wall_tt_set[i] = true end
@@ -70,13 +104,13 @@ local tt_kind = (function()
         local basic = sa and sa.basic_shape
         if a.special ~= SPECIAL_SMOOTH then
             if mat == STONE_MAT then
-                if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'sf'
-                elseif a.shape == SHAPE_WALL                                               then t[i] = 'sw' end
+                if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'sf'     -- SWD: again, BASIC_PEBBLE and BASIC_BOULDER will
+                elseif a.shape == SHAPE_WALL                                               then t[i] = 'sw' end --  be nil, because those constants do not exist.
             elseif mat == LAVA_STONE_MAT then
                 if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'lf'
                 elseif a.shape == SHAPE_WALL                                               then t[i] = 'lw' end
             elseif mat == MINERAL_MAT then
-                if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'mf'
+                if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'mf'     -- SWD: 
                 elseif a.shape == SHAPE_WALL                                               then t[i] = 'mw' end
             end
         elseif a.shape == SHAPE_WALL then
@@ -94,6 +128,8 @@ end)()
 -- STATE
 -- ============================================================================
 
+-- SWD: I am extremely uncomfortable that you are keeping these bfs_* variables
+--  between runs of the script.  this seems like it should be internal data.
 local S = rawget(_G, "__smoothfloor_state")
 if not S then
     S = {
@@ -211,7 +247,7 @@ local function scan_block(block, resuffix)
             local kind = tt_kind[tt]
             if kind == 'sf' or kind == 'sw' or kind == 'lf' or kind == 'lw'
                or kind == 'mf' or kind == 'mw' then
-                if not block.designation[lx][ly].hidden then
+                if not block.designation[lx][ly].hidden then        -- SWD: is this why you can't get caverns to smooth?
                     local cfg
                     if kind == 'mf' or kind == 'mw' then
                         cfg = mine_cfg[lx] and mine_cfg[lx][ly]
@@ -242,7 +278,7 @@ local function scan_block(block, resuffix)
                                         end
                                         break
                                     elseif sub_mat == df.tiletype_material.SOIL
-                                        or sub_mat == df.tiletype_material.SOIL_WET then
+                                        or sub_mat == df.tiletype_material.SOIL_WET then        -- SWD: df.tiletype_material.SOIL_WET does not exist.
                                         -- soil wall: pass through, keep probing
                                     else
                                         break  -- construction, mineral, etc.
@@ -500,8 +536,24 @@ local function scan_tick(gen)
     end
 
     if is_player_map() then
+        -- SWD: your understanding of how df.global.world.map.map_blocks works is not correct.
+        --  this variable, for a player fort, contains every *possible* block in that map.
+        --  "new blocks" are not added as tiles are revealed.  at most, a block with an
+        --  already-existing entry is converted from nil to a valid map_block.
+        --  but I believe that in 0.47 and 0.50+, even that doesn't happen; instead all
+        --  possible map blocks are created at fort load time.
+        -- SWD: this is why I keep saying that you're processing two and a half million
+        --  tiles all at once.  (in the for I'm looking at, 3.4 million.)
         local blocks    = df.global.world.map.map_blocks
         local cur_count = #blocks
+        -- SWD: the point is, #cur_count will never change for the current fort.
+        --  so this code will run *at most* once.
+        -- SWD: worse, if the player quits out without saving, then reloads a fort,
+        --  I believe this code won't trigger at all for the reload, leaving the
+        --  fort unsmoothed.  maybe the "underground rescan" will eventually do it.
+        -- SWD: (also consider what will happen if the player loads a fort, then
+        --  returns to the main menu via either save or quit, then loads a different
+        --  fort which happens to have fewer map blocks.
         if cur_count > S.bfs_block_count then
             local tf, tw = 0, 0
             for i = S.bfs_block_count, cur_count - 1 do
@@ -517,6 +569,7 @@ local function scan_tick(gen)
             S.bfs_block_count = cur_count
         end
 
+        -- SWD: I don't really follow the logic here.  it does this *forever*?
         -- Rolling re-scan of subterranean blocks to catch tiles dwarves have newly revealed.
         local all_blocks = df.global.world.map.map_blocks
         local total      = #all_blocks
@@ -539,6 +592,10 @@ local function scan_tick(gen)
         return
     end
 
+    -- SWD: and again, what about walking around the world?  what happens when
+    --  three new 48x48 midmap blocks are loaded?  cur_count may happen to have
+    --  fewer blocks than S.bfs_block_count, or it may happen to have equal or
+    --  more blocks.
     -- Adventure mode: BFS flood-fill from adventurer.
     local cur_count = #df.global.world.map.map_blocks
     if cur_count < S.bfs_block_count then
