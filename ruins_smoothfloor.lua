@@ -15,29 +15,6 @@ local SMOOTH_ID_PREFIXES = {
     { prefix = "LIGHT_STRUCTURE_",  cfg = { floor=true, wall=true  } },
     { prefix = "BASIC_MACHINERY_",  cfg = { floor=true, wall=false } },
 }
-
---[[
-SWD: just by the way, I was looking for BASIC_MACHINERY_.* in your raws,
-and I noticed that a lot of inorganics that look like they should be
-stone don't have the [IS_STONE] token.  for example, the second material:
-
-[USE_MATERIAL_TEMPLATE:STONE_TEMPLATE]
-[STONE_NAME:basic machinery scrap ID-MT40-EC15-CS31]
-[STATE_NAME_ADJ:ALL_SOLID:basic machinery ID-MT40-EC15-CS31]
-[MATERIAL_VALUE:28]
-[DISPLAY_COLOR:0:0:1]
-[TILE:15]
-[SOLID_DENSITY:4100]
-[MELTING_POINT:11485]
-[METAL_ORE:ALLOY:40]
-[METAL_ORE:ENERGETIC_COMPOUND:15]
-[METAL_ORE:COMPUTING_SUBSTRATE:31][REACTION_CLASS:MACHINERY]
-[METAMORPHIC][SEDIMENTARY]
-[INORGANIC:N_MASS_ID_NM94]
-
-I'm not sure if that's intentional.  Just bringing it up.
---]]
-
 -- ============================================================================
 -- TILETYPE CONSTANTS
 -- ============================================================================
