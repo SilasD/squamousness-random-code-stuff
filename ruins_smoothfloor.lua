@@ -7,7 +7,7 @@
 
 local SCAN_INTERVAL_TICKS  = 3
 local BLOCKS_PER_TICK      = 20
-local VISIBLE_BLOCK_RADIUS = 2   -- 2 blocks = 32 tiles; safely covers the DF adventure viewport
+local VISIBLE_BLOCK_RADIUS = 2  
 
 local SMOOTH_ID_PREFIXES = {
     { prefix = "HEAVY_STRUCTURE_",  cfg = { floor=true, wall=true  } },
@@ -15,6 +15,7 @@ local SMOOTH_ID_PREFIXES = {
     { prefix = "LIGHT_STRUCTURE_",  cfg = { floor=true, wall=true  } },
     { prefix = "BASIC_MACHINERY_",  cfg = { floor=true, wall=false } },
 }
+
 -- ============================================================================
 -- TILETYPE CONSTANTS
 -- ============================================================================
@@ -23,26 +24,23 @@ local STONE_MAT        = df.tiletype_material.STONE
 local LAVA_STONE_MAT   = df.tiletype_material.LAVA_STONE
 local MINERAL_MAT      = df.tiletype_material.MINERAL
 local SHAPE_WALL       = df.tiletype_shape.WALL
-local SHAPE_OPEN_SPACE = df.tiletype_shape.OPEN_SPACE or -1         -- SWD: you *really* need to check that these things exist.
-                                                                    --  you either need df.tiletype.OpenSpace or df.tiletype_shape.EMPTY
-                                                                    -- SWD: it is really simple to check.  have DF running with the console window open,
-                                                                    --  (Windows: use the show command, or configure it to always show on startup in
-                                                                    --  the Ctrl-Shift-E control panel, Preferences tab, Hide console on startup, set false.
-                                                                    --
-                                                                    -- then you can use the `lua` command and run Lua statements like
-                                                                    --      print(df.tiletype_shape.OPEN_SPACE)
-                                                                    --  or use the shortcuts ! ~ @ ^
-                                                                    --  which call print, printall, printall_ipairs, and printall_recurse respectively.
-                                                                    --      !df.tiletype_shape.OPEN_SPACE       -- check for existance
-                                                                    --      @df.tiletype_shape                  -- show all valid enum numbers and names.
 local SPECIAL_SMOOTH   = df.tiletype_special.SMOOTH
 local BASIC_FLOOR      = df.tiletype_shape_basic.Floor
-local BASIC_PEBBLE     = df.tiletype_shape_basic.Pebble             -- SWD: this does not exist.  try df.tiletype_shape.PEBBLES
-local BASIC_BOULDER    = df.tiletype_shape_basic.Boulder            -- SWD: this does not exist.  try df.tiletype_shape.BOULDER
-                                                                    -- SWD: these are the only basic shapes: Open, Floor, Ramp, Wall, Stair.
-                                                                    --  list them at the lua prompt, @df.tiletype_shape_basic
+
 local SMOOTH_FLOOR_TT      = df.tiletype.StoneFloorSmooth
 local SMOOTH_LAVA_FLOOR_TT = df.tiletype.LavaFloorSmooth
+local SOIL_MAT             = df.tiletype_material.SOIL
+local BASIC_OPEN           = df.tiletype_shape_basic.Open
+
+-- Pre-cached function references for tight loops 
+local maps_getTileBiomeRgn   = dfhack.maps.getTileBiomeRgn
+local maps_getRegionBiome    = dfhack.maps.getRegionBiome
+local maps_getTileBlock      = dfhack.maps.getTileBlock
+local maps_getTileType       = dfhack.maps.getTileType
+local maps_getTileAssignment = dfhack.maps.getTileAssignment
+local geo_biome_find         = df.world_geo_biome.find
+local tiletype_attrs         = df.tiletype.attrs
+local shape_attrs            = df.tiletype_shape.attrs
 
 local smooth_stone_wall_by_suffix = {}
 local smooth_lava_wall_by_suffix  = {}
@@ -61,9 +59,9 @@ for _, pair in ipairs{ {"Stone", smooth_stone_wall_by_suffix}, {"Lava", smooth_l
     end end end end
 end
 
-if next(smooth_lava_wall_by_suffix) == nil then                     -- SWD: this should not be necessary.
-    smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix        --  once you have lava stone working, it will always work.
-    smooth_lava_wall_fallback  = smooth_stone_wall_fallback         --  tiletypes are *constants*, they will not change.
+if next(smooth_lava_wall_by_suffix) == nil then
+    smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix
+    smooth_lava_wall_fallback  = smooth_stone_wall_fallback
 end
 
 for _, i in pairs(smooth_stone_wall_by_suffix) do smooth_stone_wall_tt_set[i] = true end
@@ -81,14 +79,14 @@ local tt_kind = (function()
         local basic = sa and sa.basic_shape
         if a.special ~= SPECIAL_SMOOTH then
             if mat == STONE_MAT then
-                if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'sf'     -- SWD: again, BASIC_PEBBLE and BASIC_BOULDER will
-                elseif a.shape == SHAPE_WALL                                               then t[i] = 'sw' end --  be nil, because those constants do not exist.
+                if basic == BASIC_FLOOR     then t[i] = 'sf'
+                elseif a.shape == SHAPE_WALL then t[i] = 'sw' end
             elseif mat == LAVA_STONE_MAT then
-                if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'lf'
-                elseif a.shape == SHAPE_WALL                                               then t[i] = 'lw' end
+                if basic == BASIC_FLOOR     then t[i] = 'lf'
+                elseif a.shape == SHAPE_WALL then t[i] = 'lw' end
             elseif mat == MINERAL_MAT then
-                if basic == BASIC_FLOOR or basic == BASIC_PEBBLE or basic == BASIC_BOULDER then t[i] = 'mf'     -- SWD: 
-                elseif a.shape == SHAPE_WALL                                               then t[i] = 'mw' end
+                if basic == BASIC_FLOOR     then t[i] = 'mf'
+                elseif a.shape == SHAPE_WALL then t[i] = 'mw' end
             end
         elseif a.shape == SHAPE_WALL then
             if smooth_stone_wall_tt_set[i] then
@@ -105,8 +103,6 @@ end)()
 -- STATE
 -- ============================================================================
 
--- SWD: I am extremely uncomfortable that you are keeping these bfs_* variables
---  between runs of the script.  this seems like it should be internal data.
 local S = rawget(_G, "__smoothfloor_state")
 if not S then
     S = {
@@ -161,11 +157,11 @@ end
 -- ============================================================================
 
 local function get_biome_for_tile(wx, wy, wz)
-    local rx, ry = dfhack.maps.getTileBiomeRgn(wx, wy, wz)
+    local rx, ry = maps_getTileBiomeRgn(wx, wy, wz)
     if not rx then return nil end
-    local ri = dfhack.maps.getRegionBiome(rx, ry)
+    local ri = maps_getRegionBiome(rx, ry)
     if not ri then return nil end
-    return df.world_geo_biome.find(ri.geo_index)
+    return geo_biome_find(ri.geo_index)
 end
 
 -- ============================================================================
@@ -173,8 +169,8 @@ end
 -- ============================================================================
 
 local function wall_at(nx, ny, nz)
-    local tt = dfhack.maps.getTileType(nx, ny, nz)
-    local a  = tt and df.tiletype.attrs[tt]
+    local tt = maps_getTileType(nx, ny, nz)
+    local a  = tt and tiletype_attrs[tt]
     return a ~= nil and a.shape == SHAPE_WALL
 end
 
@@ -200,17 +196,19 @@ local function scan_block(block, resuffix)
     local by = block.map_pos.y
     local bz = block.map_pos.z
 
-    -- Mineral event cfg: covers MINERAL-type tiles (non-IS_STONE veins like BASIC_MACHINERY).
+    -- Mineral event cfg: covers MINERAL-type tiles (I think???)
     local mine_cfg = {}
     for _, ev in ipairs(block.block_events) do
         if getmetatable(ev) == "block_square_event_mineralst" then
             local c = smooth_inorganic_cache[ev.inorganic_mat]
-            if c then
-                for lx2 = 0, 15 do
-                    for ly2 = 0, 15 do
-                        if dfhack.maps.getTileAssignment(ev.tile_bitmask, lx2, ly2) then
+            for lx2 = 0, 15 do
+                for ly2 = 0, 15 do
+                    if maps_getTileAssignment(ev.tile_bitmask, lx2, ly2) then
+                        if c then
                             if not mine_cfg[lx2] then mine_cfg[lx2] = {} end
                             mine_cfg[lx2][ly2] = c
+                        elseif mine_cfg[lx2] then
+                            mine_cfg[lx2][ly2] = nil
                         end
                     end
                 end
@@ -224,28 +222,26 @@ local function scan_block(block, resuffix)
             local kind = tt_kind[tt]
             if kind == 'sf' or kind == 'sw' or kind == 'lf' or kind == 'lw'
                or kind == 'mf' or kind == 'mw' then
-                if not block.designation[lx][ly].hidden then        -- SWD: is this why you can't get caverns to smooth?
+                if not block.designation[lx][ly].hidden then
                     local cfg
                     if kind == 'mf' or kind == 'mw' then
                         cfg = mine_cfg[lx] and mine_cfg[lx][ly]
                     else
-                        -- STONE/LAVA: look up each tile's own biome and geolayer directly.
-                        -- Per-tile (not per-block) so tiles near biome boundaries are correct.
+                        -- look up each tile's own biome and geolayer directly.
                         local b = get_biome_for_tile(bx + lx, by + ly, bz)
                         if b then
                             local layer = b.layers[block.designation[lx][ly].geolayer_index]
                             if layer then cfg = smooth_inorganic_cache[layer.mat_index] end
                         end
-                        -- Surface floor geolayer is unreliable (reflects debris layer, not actual rock).
-                        -- Probe downward: pass through soil walls and floor-like tiles until the first
-                        -- stone/lava wall, whose geolayer identifies the actual geological material.
+                        -- Probe down: pass through soil walls and floor-like tiles until the first tone/lava wall, use that maybe?
                         if not cfg and (kind == 'sf' or kind == 'lf') and block.designation[lx][ly].outside then
                             for depth = 1, 10 do
-                                local bb = dfhack.maps.getTileBlock(bx+lx, by+ly, bz-depth)
+                                local bb = maps_getTileBlock(bx+lx, by+ly, bz-depth)
                                 if not bb then break end
                                 local sub_tt  = bb.tiletype[lx][ly]
-                                local sub_mat = df.tiletype.attrs[sub_tt].material
-                                local sub_shp = df.tiletype.attrs[sub_tt].shape
+                                local sub_a   = tiletype_attrs[sub_tt]
+                                local sub_mat = sub_a.material
+                                local sub_shp = sub_a.shape
                                 if sub_shp == SHAPE_WALL then
                                     if sub_mat == STONE_MAT or sub_mat == LAVA_STONE_MAT then
                                         local bbiome = get_biome_for_tile(bx+lx, by+ly, bz-depth)
@@ -254,18 +250,15 @@ local function scan_block(block, resuffix)
                                             if bl then cfg = smooth_inorganic_cache[bl.mat_index] end
                                         end
                                         break
-                                    elseif sub_mat == df.tiletype_material.SOIL
-                                        or sub_mat == df.tiletype_material.SOIL_WET then        -- SWD: df.tiletype_material.SOIL_WET does not exist.
-                                        -- soil wall: pass through, keep probing
+                                    elseif sub_mat == SOIL_MAT or sub_mat == MINERAL_MAT then
+                                        -- soil/mineral wall: pass through, keep probing
                                     else
-                                        break  -- construction, mineral, etc.
+                                        break  -- construction, etc.
                                     end
                                 else
-                                    local sub_sa    = df.tiletype_shape.attrs[sub_shp]
+                                    local sub_sa    = shape_attrs[sub_shp]
                                     local sub_basic = sub_sa and sub_sa.basic_shape
-                                    if sub_basic ~= BASIC_FLOOR
-                                        and sub_basic ~= BASIC_PEBBLE
-                                        and sub_basic ~= BASIC_BOULDER then
+                                    if sub_basic ~= BASIC_FLOOR then
                                         break  -- open space, ramp, stair, etc.
                                     end
                                     -- floor-like tile: keep probing down
@@ -326,7 +319,7 @@ local function smooth_visible_area()
     for dbx = -VISIBLE_BLOCK_RADIUS, VISIBLE_BLOCK_RADIUS do
         for dby = -VISIBLE_BLOCK_RADIUS, VISIBLE_BLOCK_RADIUS do
             for dbz = -1, 1 do
-                local block = dfhack.maps.getTileBlock(
+                local block = maps_getTileBlock(
                     pbx + dbx * 16, pby + dby * 16, pbz + dbz)
                 if block then
                     local f, w = scan_block(block, false)
@@ -407,7 +400,7 @@ local function bfs_step()
         local k          = block_key(bx, by, bz)
         S.bfs_seen[k]    = nil
 
-        local block = dfhack.maps.getTileBlock(bx, by, bz)
+        local block = maps_getTileBlock(bx, by, bz)
         if block then
             S.bfs_done[k] = true
             local pbx, pby, pbz = player_block_pos()
@@ -424,10 +417,11 @@ local function bfs_step()
             local has_non_wall = false
             for lx = 0, 15 do
                 for ly = 0, 15 do
-                    local a = df.tiletype.attrs[block.tiletype[lx][ly]]
+                    local a = tiletype_attrs[block.tiletype[lx][ly]]
                     if a then
-                        if a.shape ~= SHAPE_OPEN_SPACE then has_non_open = true end
-                        if a.shape ~= SHAPE_WALL        then has_non_wall = true end
+                        local sa2 = shape_attrs[a.shape]
+                        if not (sa2 and sa2.basic_shape == BASIC_OPEN) then has_non_open = true end
+                        if a.shape ~= SHAPE_WALL then has_non_wall = true end
                     end
                     if has_non_open and has_non_wall then goto bfs_analyze_done end
                 end
@@ -513,24 +507,8 @@ local function scan_tick(gen)
     end
 
     if is_player_map() then
-        -- SWD: your understanding of how df.global.world.map.map_blocks works is not correct.
-        --  this variable, for a player fort, contains every *possible* block in that map.
-        --  "new blocks" are not added as tiles are revealed.  at most, a block with an
-        --  already-existing entry is converted from nil to a valid map_block.
-        --  but I believe that in 0.47 and 0.50+, even that doesn't happen; instead all
-        --  possible map blocks are created at fort load time.
-        -- SWD: this is why I keep saying that you're processing two and a half million
-        --  tiles all at once.  (in the for I'm looking at, 3.4 million.)
         local blocks    = df.global.world.map.map_blocks
         local cur_count = #blocks
-        -- SWD: the point is, #cur_count will never change for the current fort.
-        --  so this code will run *at most* once.
-        -- SWD: worse, if the player quits out without saving, then reloads a fort,
-        --  I believe this code won't trigger at all for the reload, leaving the
-        --  fort unsmoothed.  maybe the "underground rescan" will eventually do it.
-        -- SWD: (also consider what will happen if the player loads a fort, then
-        --  returns to the main menu via either save or quit, then loads a different
-        --  fort which happens to have fewer map blocks.
         if cur_count > S.bfs_block_count then
             local tf, tw = 0, 0
             for i = S.bfs_block_count, cur_count - 1 do
@@ -546,7 +524,6 @@ local function scan_tick(gen)
             S.bfs_block_count = cur_count
         end
 
-        -- SWD: I don't really follow the logic here.  it does this *forever*?
         -- Rolling re-scan of subterranean blocks to catch tiles dwarves have newly revealed.
         local all_blocks = df.global.world.map.map_blocks
         local total      = #all_blocks
@@ -569,10 +546,6 @@ local function scan_tick(gen)
         return
     end
 
-    -- SWD: and again, what about walking around the world?  what happens when
-    --  three new 48x48 midmap blocks are loaded?  cur_count may happen to have
-    --  fewer blocks than S.bfs_block_count, or it may happen to have equal or
-    --  more blocks.
     -- Adventure mode: BFS flood-fill from adventurer.
     local cur_count = #df.global.world.map.map_blocks
     if cur_count < S.bfs_block_count then
@@ -674,7 +647,7 @@ elseif cmd == "debug" then
     for bxi = 0, math.floor(mx / 16) - 1 do
         for byi = 0, math.floor(my / 16) - 1 do
             for bz = 0, mz - 1 do
-                local block = dfhack.maps.getTileBlock(bxi * 16, byi * 16, bz)
+                local block = maps_getTileBlock(bxi * 16, byi * 16, bz)
                 if block then
                     for lx = 0, 15 do
                         for ly = 0, 15 do
