@@ -200,16 +200,17 @@ local function scan_block(block, resuffix)
     local mine_cfg = {}
     for _, ev in ipairs(block.block_events) do
         if getmetatable(ev) == "block_square_event_mineralst" then
-            local c = smooth_inorganic_cache[ev.inorganic_mat]
+            local c = smooth_inorganic_cache[ev.inorganic_mat] or { floor = false, wall = false }   -- SWD: setting c to a default.
             for lx2 = 0, 15 do
+                mine_cfg[lx2] = {}
                 for ly2 = 0, 15 do
                     if maps_getTileAssignment(ev.tile_bitmask, lx2, ly2) then
-                        if c then
-                            if not mine_cfg[lx2] then mine_cfg[lx2] = {} end
+                        --if c then                                                 -- SWD: disabled this test; c will always be valid now.
+                            -- if not mine_cfg[lx2] then mine_cfg[lx2] = {} end     -- SWD: setting this at the top of the lx2 loop.
                             mine_cfg[lx2][ly2] = c
-                        elseif mine_cfg[lx2] then
-                            mine_cfg[lx2][ly2] = nil
-                        end
+                        --elseif mine_cfg[lx2] then                                 -- SWD: disabled this fallback per above change.
+                        --    mine_cfg[lx2][ly2] = nil
+                        --end
                     end
                 end
             end
