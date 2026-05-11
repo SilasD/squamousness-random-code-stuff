@@ -4,8 +4,8 @@
 -- ── PROFILING AND TIMING ──────────────────────────────────────────────────────
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@class dfhack
----@field getQueryPerformanceCounter function
----@field getQueryPerformanceFrequency function
+---@field QueryPerformanceCounter function
+---@field QueryPerformanceFrequency function
 
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@type { [string]: integer }, { [string]: integer }, { [string]: integer }
@@ -14,10 +14,10 @@ local on_timers, off_timers, paused_timers = {}, {}, {}
 
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@return integer
-getTimestamp          = dfhack.getQueryPerformanceCounter     or os.clock
+getTimestamp          = dfhack.QueryPerformanceCounter     or os.clock
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@return number
-getTimestampDivisor   = dfhack.getQueryPerformanceFrequency   or function() return 1.0; end
+getTimestampDivisor   = dfhack.QueryPerformanceFrequency   or function() return 1.0; end
 -- ──────────────────────────────────────────────────────────────────────────────
 ---@param key string
 function timer_on(key)
