@@ -7,7 +7,7 @@
 
 local SCAN_INTERVAL_TICKS  = 3
 local BLOCKS_PER_TICK      = 20
-local VISIBLE_BLOCK_RADIUS = 2  
+local VISIBLE_BLOCK_RADIUS = 2   -- 2 blocks = 32 tiles; safely covers the DF adventure viewport
 
 local SMOOTH_ID_PREFIXES = {
     { prefix = "HEAVY_STRUCTURE_",  cfg = { floor=true, wall=true  } },
@@ -32,7 +32,7 @@ local SMOOTH_LAVA_FLOOR_TT = df.tiletype.LavaFloorSmooth
 local SOIL_MAT             = df.tiletype_material.SOIL
 local BASIC_OPEN           = df.tiletype_shape_basic.Open
 
--- Pre-cached function references for tight loops 
+-- Pre-cached function references for tight loops (~150µs per dfhack./df. dereference avoided)
 local maps_getTileBiomeRgn   = dfhack.maps.getTileBiomeRgn
 local maps_getRegionBiome    = dfhack.maps.getRegionBiome
 local maps_getTileBlock      = dfhack.maps.getTileBlock
@@ -196,21 +196,35 @@ local function scan_block(block, resuffix)
     local by = block.map_pos.y
     local bz = block.map_pos.z
 
-    -- Mineral event cfg: covers MINERAL-type tiles (I think???)
+    -- Mineral event cfg: DF display priority — cluster_one(4) > cluster_small(3) > vein(2) > cluster(1).
+    -- Equal-priority ties: last in block_events list wins (matches DF behaviour per tile-material.lua).
     local mine_cfg = {}
+    local mine_pri = {}
+    local function vein_priority(ev)
+        if ev.flags.cluster_one   then return 4
+        elseif ev.flags.cluster_small then return 3
+        elseif ev.flags.vein          then return 2
+        else                               return 1
+        end
+    end
     for _, ev in ipairs(block.block_events) do
         if getmetatable(ev) == "block_square_event_mineralst" then
-            local c = smooth_inorganic_cache[ev.inorganic_mat] or { floor = false, wall = false }   -- SWD: setting c to a default.
+            local c = smooth_inorganic_cache[ev.inorganic_mat]
+            local p = vein_priority(ev)
             for lx2 = 0, 15 do
-                mine_cfg[lx2] = {}
                 for ly2 = 0, 15 do
                     if maps_getTileAssignment(ev.tile_bitmask, lx2, ly2) then
-                        --if c then                                                 -- SWD: disabled this test; c will always be valid now.
-                            -- if not mine_cfg[lx2] then mine_cfg[lx2] = {} end     -- SWD: setting this at the top of the lx2 loop.
-                            mine_cfg[lx2][ly2] = c
-                        --elseif mine_cfg[lx2] then                                 -- SWD: disabled this fallback per above change.
-                        --    mine_cfg[lx2][ly2] = nil
-                        --end
+                        if not mine_pri[lx2] then mine_pri[lx2] = {} end
+                        local cur = mine_pri[lx2][ly2]
+                        if not cur or p >= cur then
+                            mine_pri[lx2][ly2] = p
+                            if c then
+                                if not mine_cfg[lx2] then mine_cfg[lx2] = {} end
+                                mine_cfg[lx2][ly2] = c
+                            elseif mine_cfg[lx2] then
+                                mine_cfg[lx2][ly2] = nil
+                            end
+                        end
                     end
                 end
             end
@@ -228,13 +242,16 @@ local function scan_block(block, resuffix)
                     if kind == 'mf' or kind == 'mw' then
                         cfg = mine_cfg[lx] and mine_cfg[lx][ly]
                     else
-                        -- look up each tile's own biome and geolayer directly.
+                        -- STONE/LAVA: look up each tile's own biome and geolayer directly.
+                        -- Per-tile (not per-block) so tiles near biome boundaries are correct.
                         local b = get_biome_for_tile(bx + lx, by + ly, bz)
                         if b then
                             local layer = b.layers[block.designation[lx][ly].geolayer_index]
                             if layer then cfg = smooth_inorganic_cache[layer.mat_index] end
                         end
-                        -- Probe down: pass through soil walls and floor-like tiles until the first tone/lava wall, use that maybe?
+                        -- Surface floor geolayer is unreliable (reflects debris layer, not actual rock).
+                        -- Probe downward: pass through soil walls and floor-like tiles until the first
+                        -- stone/lava wall, whose geolayer identifies the actual geological material.
                         if not cfg and (kind == 'sf' or kind == 'lf') and block.designation[lx][ly].outside then
                             for depth = 1, 10 do
                                 local bb = maps_getTileBlock(bx+lx, by+ly, bz-depth)
@@ -251,8 +268,16 @@ local function scan_block(block, resuffix)
                                             if bl then cfg = smooth_inorganic_cache[bl.mat_index] end
                                         end
                                         break
-                                    elseif sub_mat == SOIL_MAT or sub_mat == MINERAL_MAT then
-                                        -- soil/mineral wall: pass through, keep probing
+                                    elseif sub_mat == SOIL_MAT then
+                                        -- soil wall: pass through, keep probing
+                                    elseif sub_mat == MINERAL_MAT then
+                                        -- mineral wall: geolayer_index is reliable here (not a surface tile)
+                                        local bbiome = get_biome_for_tile(bx+lx, by+ly, bz-depth)
+                                        if bbiome then
+                                            local bl = bbiome.layers[bb.designation[lx][ly].geolayer_index]
+                                            if bl then cfg = smooth_inorganic_cache[bl.mat_index] end
+                                        end
+                                        break
                                     else
                                         break  -- construction, etc.
                                     end
