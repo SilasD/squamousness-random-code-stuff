@@ -286,7 +286,7 @@ function add_construction_to_tile(x, y, z, shape, mat_type, mat_index, override_
         timer_off('construction:new')
         c:delete()
 
-        timer_on('clone:new')               -- 3.078 us     2.997 us    3.077 us
+        timer_on('clone:new')               -- 3.078 us     2.997 us    3.077 us        WINNER
         local c = clone:new()
         timer_off('clone:new')
         c:delete()
@@ -325,7 +325,7 @@ function add_construction_to_tile(x, y, z, shape, mat_type, mat_index, override_
         for k, v in pairs(c) do if k == "pos" then for kk,vv in ipairs{'x','y','z'} do assert(c[k][vv] == cc[k][vv]) end elseif k == "flags" then assert(c.flags.no_build_item == cc.flags.no_build_item) assert(c.flags.top_of_wall == cc.flags.top_of_wall) assert(c.flags.reinforced == cc.flags.reinforced) else assert(c[k] == cc[k], k) end end
         cc:delete()
 
-        timer_on('clone and set')           -- 17.633 us    17.245 us   17.475 us
+        timer_on('clone and set')           -- 17.633 us    17.245 us   17.475 us       WINNER
         local cc = clone:new()
         cc.pos.x, cc.pos.y, cc.pos.z = x, y, z
         cc.mat_type, cc.mat_index = mat_type, mat_index

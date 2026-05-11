@@ -5,6 +5,9 @@
 --   ruins_smoothfloor force
 --   ruins_smoothfloor status
 
+local getTimestamp          = dfhack.QueryPerformanceCounter     or os.clock
+local getTimestampDivisor   = dfhack.QueryPerformanceFrequency   or function() return 1.0; end
+
 local SCAN_INTERVAL_TICKS  = 3
 local BLOCKS_PER_TICK      = 20
 local VISIBLE_BLOCK_RADIUS = 2   -- 2 blocks = 32 tiles; safely covers the DF adventure viewport
@@ -21,14 +24,14 @@ local SMOOTH_ID_PREFIXES = {
 -- ============================================================================
 
 local STONE_MAT        = df.tiletype_material.STONE
-local LAVA_STONE_MAT   = df.tiletype_material.LAVA_STONE
+--local LAVA_STONE_MAT   = df.tiletype_material.LAVA_STONE
 local MINERAL_MAT      = df.tiletype_material.MINERAL
 local SHAPE_WALL       = df.tiletype_shape.WALL
 local SPECIAL_SMOOTH   = df.tiletype_special.SMOOTH
 local BASIC_FLOOR      = df.tiletype_shape_basic.Floor
 
 local SMOOTH_FLOOR_TT      = df.tiletype.StoneFloorSmooth
-local SMOOTH_LAVA_FLOOR_TT = df.tiletype.LavaFloorSmooth
+--local SMOOTH_LAVA_FLOOR_TT = df.tiletype.LavaFloorSmooth
 local SOIL_MAT             = df.tiletype_material.SOIL
 local BASIC_OPEN           = df.tiletype_shape_basic.Open
 
@@ -43,13 +46,13 @@ local tiletype_attrs         = df.tiletype.attrs
 local shape_attrs            = df.tiletype_shape.attrs
 
 local smooth_stone_wall_by_suffix = {}
-local smooth_lava_wall_by_suffix  = {}
+--local smooth_lava_wall_by_suffix  = {}
 local smooth_stone_wall_fallback  = df.tiletype.StonePillar
-local smooth_lava_wall_fallback   = df.tiletype.LavaPillar
+--local smooth_lava_wall_fallback   = df.tiletype.LavaPillar
 local smooth_stone_wall_tt_set    = {}
-local smooth_lava_wall_tt_set     = {}
+--local smooth_lava_wall_tt_set     = {}
 
-for _, pair in ipairs{ {"Stone", smooth_stone_wall_by_suffix}, {"Lava", smooth_lava_wall_by_suffix} } do
+for _, pair in ipairs{ {"Stone", smooth_stone_wall_by_suffix}, --[[{"Lava", smooth_lava_wall_by_suffix}]] } do
     local prefix, tbl = pair[1], pair[2]
     for _, L in ipairs{"", "L"} do for _, R in ipairs{"", "R"} do
     for _, U in ipairs{"", "U"} do for _, D in ipairs{"", "D"} do
@@ -59,15 +62,15 @@ for _, pair in ipairs{ {"Stone", smooth_stone_wall_by_suffix}, {"Lava", smooth_l
     end end end end
 end
 
-if next(smooth_lava_wall_by_suffix) == nil then
-    smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix
-    smooth_lava_wall_fallback  = smooth_stone_wall_fallback
-end
+--if next(smooth_lava_wall_by_suffix) == nil then
+--    smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix
+--    smooth_lava_wall_fallback  = smooth_stone_wall_fallback
+--end
 
 for _, i in pairs(smooth_stone_wall_by_suffix) do smooth_stone_wall_tt_set[i] = true end
-if smooth_lava_wall_by_suffix ~= smooth_stone_wall_by_suffix then
-    for _, i in pairs(smooth_lava_wall_by_suffix) do smooth_lava_wall_tt_set[i] = true end
-end
+--if smooth_lava_wall_by_suffix ~= smooth_stone_wall_by_suffix then
+--    for _, i in pairs(smooth_lava_wall_by_suffix) do smooth_lava_wall_tt_set[i] = true end
+--end
 
 -- Per-tiletype kind lookup built once at load
 local tt_kind = (function()
@@ -81,9 +84,9 @@ local tt_kind = (function()
             if mat == STONE_MAT then
                 if basic == BASIC_FLOOR     then t[i] = 'sf'
                 elseif a.shape == SHAPE_WALL then t[i] = 'sw' end
-            elseif mat == LAVA_STONE_MAT then
-                if basic == BASIC_FLOOR     then t[i] = 'lf'
-                elseif a.shape == SHAPE_WALL then t[i] = 'lw' end
+--            elseif mat == LAVA_STONE_MAT then
+--                if basic == BASIC_FLOOR     then t[i] = 'lf'
+--                elseif a.shape == SHAPE_WALL then t[i] = 'lw' end
             elseif mat == MINERAL_MAT then
                 if basic == BASIC_FLOOR     then t[i] = 'mf'
                 elseif a.shape == SHAPE_WALL then t[i] = 'mw' end
@@ -91,8 +94,8 @@ local tt_kind = (function()
         elseif a.shape == SHAPE_WALL then
             if smooth_stone_wall_tt_set[i] then
                 t[i] = 'sw_r'
-            elseif smooth_lava_wall_tt_set[i] then
-                t[i] = 'lw_r'
+--            elseif smooth_lava_wall_tt_set[i] then
+--                t[i] = 'lw_r'
             end
         end
     end
@@ -235,9 +238,9 @@ local function scan_block(block, resuffix)
         for ly = 0, 15 do
             local tt   = block.tiletype[lx][ly]
             local kind = tt_kind[tt]
-            if kind == 'sf' or kind == 'sw' or kind == 'lf' or kind == 'lw'
+            if kind == 'sf' or kind == 'sw' --[[or kind == 'lf' or kind == 'lw']]
                or kind == 'mf' or kind == 'mw' then
-                if not block.designation[lx][ly].hidden then
+                --if not block.designation[lx][ly].hidden then
                     local cfg
                     if kind == 'mf' or kind == 'mw' then
                         cfg = mine_cfg[lx] and mine_cfg[lx][ly]
@@ -252,7 +255,7 @@ local function scan_block(block, resuffix)
                         -- Surface floor geolayer is unreliable (reflects debris layer, not actual rock).
                         -- Probe downward: pass through soil walls and floor-like tiles until the first
                         -- stone/lava wall, whose geolayer identifies the actual geological material.
-                        if not cfg and (kind == 'sf' or kind == 'lf') and block.designation[lx][ly].outside then
+                        if not cfg and (kind == 'sf' --[[or kind == 'lf']]) and block.designation[lx][ly].outside then
                             for depth = 1, 10 do
                                 local bb = maps_getTileBlock(bx+lx, by+ly, bz-depth)
                                 if not bb then break end
@@ -261,7 +264,7 @@ local function scan_block(block, resuffix)
                                 local sub_mat = sub_a.material
                                 local sub_shp = sub_a.shape
                                 if sub_shp == SHAPE_WALL then
-                                    if sub_mat == STONE_MAT or sub_mat == LAVA_STONE_MAT then
+                                    if sub_mat == STONE_MAT --[[ or sub_mat == LAVA_STONE_MAT]] then
                                         local bbiome = get_biome_for_tile(bx+lx, by+ly, bz-depth)
                                         if bbiome then
                                             local bl = bbiome.layers[bb.designation[lx][ly].geolayer_index]
@@ -295,28 +298,28 @@ local function scan_block(block, resuffix)
                     end
                     local floor_ok = cfg and cfg.floor
                     local wall_ok  = cfg and cfg.wall
-                    if (kind == 'sf' or kind == 'lf' or kind == 'mf') and floor_ok then
-                        local ftt = (kind == 'lf') and SMOOTH_LAVA_FLOOR_TT or SMOOTH_FLOOR_TT
+                    if (kind == 'sf' --[[or kind == 'lf']] or kind == 'mf') and floor_ok then
+                        local ftt = --[[(kind == 'lf') and SMOOTH_LAVA_FLOOR_TT or]] SMOOTH_FLOOR_TT
                         if ftt then block.tiletype[lx][ly] = ftt end
                         floors = floors + 1
-                    elseif (kind == 'sw' or kind == 'lw' or kind == 'mw') and wall_ok then
-                        local tbl = (kind == 'lw') and smooth_lava_wall_by_suffix or smooth_stone_wall_by_suffix
-                        local fb  = (kind == 'lw') and smooth_lava_wall_fallback  or smooth_stone_wall_fallback
+                    elseif (kind == 'sw' --[[or kind == 'lw']] or kind == 'mw') and wall_ok then
+                        local tbl = --[[(kind == 'lw') and smooth_lava_wall_by_suffix or]] smooth_stone_wall_by_suffix
+                        local fb  = --[[(kind == 'lw') and smooth_lava_wall_fallback  or]] smooth_stone_wall_fallback
                         local wtt = pick_smooth_wall_tt(tbl, fb, bx+lx, by+ly, bz)
                         if wtt then block.tiletype[lx][ly] = wtt end
                         walls = walls + 1
                     end
-                end
-            elseif resuffix and (kind == 'sw_r' or kind == 'lw_r') then
-                if not block.designation[lx][ly].hidden then
-                    local tbl = (kind == 'sw_r') and smooth_stone_wall_by_suffix or smooth_lava_wall_by_suffix
-                    local fb  = (kind == 'sw_r') and smooth_stone_wall_fallback  or smooth_lava_wall_fallback
+                --end
+            elseif resuffix and (kind == 'sw_r' --[[or kind == 'lw_r']]) then
+                --if not block.designation[lx][ly].hidden then
+                    local tbl = (kind == 'sw_r') and smooth_stone_wall_by_suffix --[[or smooth_lava_wall_by_suffix]]
+                    local fb  = (kind == 'sw_r') and smooth_stone_wall_fallback  --[[or smooth_lava_wall_fallback ]]
                     local wtt = pick_smooth_wall_tt(tbl, fb, bx+lx, by+ly, bz)
                     if wtt and wtt ~= tt then
                         block.tiletype[lx][ly] = wtt
                         walls = walls + 1
                     end
-                end
+                --end
             end
         end
     end
@@ -634,6 +637,7 @@ if cmd == "enable" then
     end
     start_watcher()
 elseif cmd == "force" then
+    local runtime = -getTimestamp()
     if not smooth_inorganic_cache then build_inorganic_cache() end
     if dfhack.isMapLoaded() then
         local blocks = df.global.world.map.map_blocks
@@ -642,6 +646,8 @@ elseif cmd == "force" then
             local f, w = scan_block(blocks[i], true)
             tf = tf + f; tw = tw + w
         end
+        runtime = runtime + getTimestamp()
+        log("'force' runtime %09f", runtime / getTimestampDivisor())
         if tf + tw > 0 then
             log("smoothed: floors=%d walls=%d", tf, tw)
         end
@@ -679,7 +685,7 @@ elseif cmd == "debug" then
                         for ly = 0, 15 do
                             local tt   = block.tiletype[lx][ly]
                             local kind = tt_kind[tt]
-                            if kind == 'sf' or kind == 'sw' or kind == 'lf' or kind == 'lw' then
+                            if kind == 'sf' or kind == 'sw' --[[or kind == 'lf' or kind == 'lw']] then
                                 if not block.designation[lx][ly].hidden then
                                     local wx, wy = bxi * 16 + lx, byi * 16 + ly
                                     local b = get_biome_for_tile(wx, wy, bz)
@@ -692,7 +698,7 @@ elseif cmd == "debug" then
                                             stats[mat_i] = {id = inorg and inorg.id or "?", walls = 0, floors = 0}
                                         end
                                         local s = stats[mat_i]
-                                        if kind == 'sf' or kind == 'lf' then s.floors = s.floors + 1
+                                        if kind == 'sf' --[[or kind == 'lf']] then s.floors = s.floors + 1
                                         else s.walls = s.walls + 1 end
                                     else
                                         nil_biome = nil_biome + 1
