@@ -5,18 +5,15 @@
 --   ruins_smoothfloor force
 --   ruins_smoothfloor status
 
-local getTimestamp          = dfhack.QueryPerformanceCounter     or os.clock
-local getTimestampDivisor   = dfhack.QueryPerformanceFrequency   or function() return 1.0; end
-
-local SCAN_INTERVAL_TICKS  = 3
+local SCAN_INTERVAL_TICKS  = 1
 local BLOCKS_PER_TICK      = 20
-local VISIBLE_BLOCK_RADIUS = 2   -- 2 blocks = 32 tiles; safely covers the DF adventure viewport
+local VISIBLE_BLOCK_RADIUS = 2   
 
 local SMOOTH_ID_PREFIXES = {
-    { prefix = "HEAVY_STRUCTURE_",  cfg = { floor=true, wall=true  } },
-    { prefix = "MEDIAN_STRUCTURE_", cfg = { floor=true, wall=true  } },
-    { prefix = "LIGHT_STRUCTURE_",  cfg = { floor=true, wall=true  } },
-    { prefix = "BASIC_MACHINERY_",  cfg = { floor=true, wall=false } },
+    { prefix = "HEAVY_STRUCTURE_",  cfg = { floor=true, wall=true,  slope=true } },
+    { prefix = "MEDIAN_STRUCTURE_", cfg = { floor=true, wall=true,  slope=true } },
+    { prefix = "LIGHT_STRUCTURE_",  cfg = { floor=true, wall=true,  slope=true } },
+    { prefix = "BASIC_MACHINERY_",  cfg = { floor=true, wall=false, slope=true } },
 }
 
 -- ============================================================================
@@ -24,16 +21,18 @@ local SMOOTH_ID_PREFIXES = {
 -- ============================================================================
 
 local STONE_MAT        = df.tiletype_material.STONE
---local LAVA_STONE_MAT   = df.tiletype_material.LAVA_STONE
 local MINERAL_MAT      = df.tiletype_material.MINERAL
+local CONSTRUCTION_MAT = df.tiletype_material.CONSTRUCTION
 local SHAPE_WALL       = df.tiletype_shape.WALL
 local SPECIAL_SMOOTH   = df.tiletype_special.SMOOTH
 local BASIC_FLOOR      = df.tiletype_shape_basic.Floor
 
 local SMOOTH_FLOOR_TT      = df.tiletype.StoneFloorSmooth
---local SMOOTH_LAVA_FLOOR_TT = df.tiletype.LavaFloorSmooth
 local SOIL_MAT             = df.tiletype_material.SOIL
 local BASIC_OPEN           = df.tiletype_shape_basic.Open
+local BASIC_RAMP           = df.tiletype_shape_basic.Ramp
+local SHAPE_RAMP_TOP       = df.tiletype_shape.RAMP_TOP
+local OPEN_SPACE_TT        = df.tiletype.OpenSpace
 
 -- Pre-cached function references for tight loops (~150µs per dfhack./df. dereference avoided)
 local maps_getTileBiomeRgn   = dfhack.maps.getTileBiomeRgn
@@ -46,31 +45,17 @@ local tiletype_attrs         = df.tiletype.attrs
 local shape_attrs            = df.tiletype_shape.attrs
 
 local smooth_stone_wall_by_suffix = {}
---local smooth_lava_wall_by_suffix  = {}
 local smooth_stone_wall_fallback  = df.tiletype.StonePillar
---local smooth_lava_wall_fallback   = df.tiletype.LavaPillar
 local smooth_stone_wall_tt_set    = {}
---local smooth_lava_wall_tt_set     = {}
 
-for _, pair in ipairs{ {"Stone", smooth_stone_wall_by_suffix}, --[[{"Lava", smooth_lava_wall_by_suffix}]] } do
-    local prefix, tbl = pair[1], pair[2]
-    for _, L in ipairs{"", "L"} do for _, R in ipairs{"", "R"} do
-    for _, U in ipairs{"", "U"} do for _, D in ipairs{"", "D"} do
-        local suffix = L..R..U..D
-        local num = df.tiletype[prefix.."WallSmooth"..suffix]
-        if num then tbl[suffix] = num end
-    end end end end
-end
-
---if next(smooth_lava_wall_by_suffix) == nil then
---    smooth_lava_wall_by_suffix = smooth_stone_wall_by_suffix
---    smooth_lava_wall_fallback  = smooth_stone_wall_fallback
---end
+for _, L in ipairs{"", "L"} do for _, R in ipairs{"", "R"} do
+for _, U in ipairs{"", "U"} do for _, D in ipairs{"", "D"} do
+    local suffix = L..R..U..D
+    local num = df.tiletype["StoneWallSmooth"..suffix]
+    if num then smooth_stone_wall_by_suffix[suffix] = num end
+end end end end
 
 for _, i in pairs(smooth_stone_wall_by_suffix) do smooth_stone_wall_tt_set[i] = true end
---if smooth_lava_wall_by_suffix ~= smooth_stone_wall_by_suffix then
---    for _, i in pairs(smooth_lava_wall_by_suffix) do smooth_lava_wall_tt_set[i] = true end
---end
 
 -- Per-tiletype kind lookup built once at load
 local tt_kind = (function()
@@ -82,20 +67,17 @@ local tt_kind = (function()
         local basic = sa and sa.basic_shape
         if a.special ~= SPECIAL_SMOOTH then
             if mat == STONE_MAT then
-                if basic == BASIC_FLOOR     then t[i] = 'sf'
-                elseif a.shape == SHAPE_WALL then t[i] = 'sw' end
---            elseif mat == LAVA_STONE_MAT then
---                if basic == BASIC_FLOOR     then t[i] = 'lf'
---                elseif a.shape == SHAPE_WALL then t[i] = 'lw' end
+                if basic == BASIC_FLOOR      then t[i] = 'sf'
+                elseif a.shape == SHAPE_WALL  then t[i] = 'sw'
+                elseif basic == BASIC_RAMP    then t[i] = 'sr' end
             elseif mat == MINERAL_MAT then
-                if basic == BASIC_FLOOR     then t[i] = 'mf'
-                elseif a.shape == SHAPE_WALL then t[i] = 'mw' end
+                if basic == BASIC_FLOOR      then t[i] = 'mf'
+                elseif a.shape == SHAPE_WALL  then t[i] = 'mw'
+                elseif basic == BASIC_RAMP    then t[i] = 'mr' end
             end
         elseif a.shape == SHAPE_WALL then
             if smooth_stone_wall_tt_set[i] then
                 t[i] = 'sw_r'
---            elseif smooth_lava_wall_tt_set[i] then
---                t[i] = 'lw_r'
             end
         end
     end
@@ -192,7 +174,7 @@ end
 -- SCAN LOGIC
 -- ============================================================================
 
-local function scan_block(block, resuffix)
+local function scan_block(block, resuffix, all_tiles)
     if not smooth_inorganic_cache then return 0, 0 end
     local floors, walls = 0, 0
     local bx = block.map_pos.x
@@ -238,11 +220,12 @@ local function scan_block(block, resuffix)
         for ly = 0, 15 do
             local tt   = block.tiletype[lx][ly]
             local kind = tt_kind[tt]
-            if kind == 'sf' or kind == 'sw' --[[or kind == 'lf' or kind == 'lw']]
-               or kind == 'mf' or kind == 'mw' then
-                --if not block.designation[lx][ly].hidden then
+            if kind == 'sf' or kind == 'sw'
+               or kind == 'mf' or kind == 'mw'
+               or kind == 'sr' or kind == 'mr' then
+                if all_tiles or not block.designation[lx][ly].hidden then
                     local cfg
-                    if kind == 'mf' or kind == 'mw' then
+                    if kind == 'mf' or kind == 'mw' or kind == 'mr' then
                         cfg = mine_cfg[lx] and mine_cfg[lx][ly]
                     else
                         -- STONE/LAVA: look up each tile's own biome and geolayer directly.
@@ -255,7 +238,7 @@ local function scan_block(block, resuffix)
                         -- Surface floor geolayer is unreliable (reflects debris layer, not actual rock).
                         -- Probe downward: pass through soil walls and floor-like tiles until the first
                         -- stone/lava wall, whose geolayer identifies the actual geological material.
-                        if not cfg and (kind == 'sf' --[[or kind == 'lf']]) and block.designation[lx][ly].outside then
+                        if not cfg and (kind == 'sf' or kind == 'sr') and block.designation[lx][ly].outside then
                             for depth = 1, 10 do
                                 local bb = maps_getTileBlock(bx+lx, by+ly, bz-depth)
                                 if not bb then break end
@@ -264,7 +247,7 @@ local function scan_block(block, resuffix)
                                 local sub_mat = sub_a.material
                                 local sub_shp = sub_a.shape
                                 if sub_shp == SHAPE_WALL then
-                                    if sub_mat == STONE_MAT --[[ or sub_mat == LAVA_STONE_MAT]] then
+                                    if sub_mat == STONE_MAT then
                                         local bbiome = get_biome_for_tile(bx+lx, by+ly, bz-depth)
                                         if bbiome then
                                             local bl = bbiome.layers[bb.designation[lx][ly].geolayer_index]
@@ -294,32 +277,39 @@ local function scan_block(block, resuffix)
                                 end
                             end
                         end
-                        if not cfg then cfg = mine_cfg[lx] and mine_cfg[lx][ly] end
                     end
                     local floor_ok = cfg and cfg.floor
                     local wall_ok  = cfg and cfg.wall
-                    if (kind == 'sf' --[[or kind == 'lf']] or kind == 'mf') and floor_ok then
-                        local ftt = --[[(kind == 'lf') and SMOOTH_LAVA_FLOOR_TT or]] SMOOTH_FLOOR_TT
-                        if ftt then block.tiletype[lx][ly] = ftt end
+                    local slope_ok = cfg and cfg.slope
+                    if (kind == 'sf' or kind == 'mf') and floor_ok then
+                        if SMOOTH_FLOOR_TT then block.tiletype[lx][ly] = SMOOTH_FLOOR_TT end
                         floors = floors + 1
-                    elseif (kind == 'sw' --[[or kind == 'lw']] or kind == 'mw') and wall_ok then
-                        local tbl = --[[(kind == 'lw') and smooth_lava_wall_by_suffix or]] smooth_stone_wall_by_suffix
-                        local fb  = --[[(kind == 'lw') and smooth_lava_wall_fallback  or]] smooth_stone_wall_fallback
-                        local wtt = pick_smooth_wall_tt(tbl, fb, bx+lx, by+ly, bz)
+                    elseif (kind == 'sw' or kind == 'mw') and wall_ok then
+                        local wtt = pick_smooth_wall_tt(smooth_stone_wall_by_suffix, smooth_stone_wall_fallback, bx+lx, by+ly, bz)
                         if wtt then block.tiletype[lx][ly] = wtt end
                         walls = walls + 1
+                    elseif (kind == 'sr' or kind == 'mr') and slope_ok then
+                        if SMOOTH_FLOOR_TT then
+                            block.tiletype[lx][ly] = SMOOTH_FLOOR_TT
+                            local bb_above = maps_getTileBlock(bx+lx, by+ly, bz+1)
+                            if bb_above then
+                                local above_a = tiletype_attrs[bb_above.tiletype[lx][ly]]
+                                if above_a and above_a.shape == SHAPE_RAMP_TOP then
+                                    bb_above.tiletype[lx][ly] = OPEN_SPACE_TT
+                                end
+                            end
+                        end
+                        floors = floors + 1
                     end
-                --end
-            elseif resuffix and (kind == 'sw_r' --[[or kind == 'lw_r']]) then
-                --if not block.designation[lx][ly].hidden then
-                    local tbl = (kind == 'sw_r') and smooth_stone_wall_by_suffix --[[or smooth_lava_wall_by_suffix]]
-                    local fb  = (kind == 'sw_r') and smooth_stone_wall_fallback  --[[or smooth_lava_wall_fallback ]]
-                    local wtt = pick_smooth_wall_tt(tbl, fb, bx+lx, by+ly, bz)
+                end
+            elseif resuffix and kind == 'sw_r' then
+                if not block.designation[lx][ly].hidden then
+                    local wtt = pick_smooth_wall_tt(smooth_stone_wall_by_suffix, smooth_stone_wall_fallback, bx+lx, by+ly, bz)
                     if wtt and wtt ~= tt then
                         block.tiletype[lx][ly] = wtt
                         walls = walls + 1
                     end
-                --end
+                end
             end
         end
     end
@@ -347,7 +337,7 @@ local function smooth_visible_area()
     local tf, tw = 0, 0
     for dbx = -VISIBLE_BLOCK_RADIUS, VISIBLE_BLOCK_RADIUS do
         for dby = -VISIBLE_BLOCK_RADIUS, VISIBLE_BLOCK_RADIUS do
-            for dbz = -1, 1 do
+            for dbz = -1, 5 do
                 local block = maps_getTileBlock(
                     pbx + dbx * 16, pby + dby * 16, pbz + dbz)
                 if block then
@@ -362,22 +352,22 @@ local function smooth_visible_area()
     end
 end
 
--- One-time scan: smooths all currently exposed eligible underground stone.
--- Called once at enable for fortress mode.
-local function scan_all_subterranean()
+-- One-shot full-map scan for fortress mode.
+-- Runs at world load (via SC_WORLD_LOADED hook) and covers every block,
+-- including hidden caverns, so no background rescan is needed afterwards.
+local function do_initial_fort_scan()
     if not dfhack.isMapLoaded() then return end
+    if not smooth_inorganic_cache then build_inorganic_cache() end
     local blocks = df.global.world.map.map_blocks
     local tf, tw = 0, 0
     for i = 0, #blocks - 1 do
-        local block = blocks[i]
-        if block.designation[0][0].subterranean then
-            local f, w = scan_block(block, false)
-            tf = tf + f; tw = tw + w
-        end
+        local f, w = scan_block(blocks[i], false, true)
+        tf = tf + f; tw = tw + w
     end
     if tf + tw > 0 then
-        log("smoothed underground: floors=%d walls=%d", tf, tw)
+        log("initial scan: floors=%d walls=%d", tf, tw)
     end
+    S.bfs_block_count = #blocks
 end
 
 -- ============================================================================
@@ -442,17 +432,24 @@ local function bfs_step()
                 tf = tf + f; tw = tw + w
             end
 
-            local has_non_open = false
-            local has_non_wall = false
+            -- has_natural_non_open: non-open tile whose material is NOT a construction.
+            -- Used for upward BFS propagation: ruins.lua's ConstructedWall tiles are
+            -- non-open but should not drive the BFS up through empty tower columns,
+            -- which would waste the per-tick block budget and delay ground-level smoothing.
+            local has_natural_non_open = false
+            local has_non_wall         = false
             for lx = 0, 15 do
                 for ly = 0, 15 do
                     local a = tiletype_attrs[block.tiletype[lx][ly]]
                     if a then
                         local sa2 = shape_attrs[a.shape]
-                        if not (sa2 and sa2.basic_shape == BASIC_OPEN) then has_non_open = true end
+                        if not (sa2 and sa2.basic_shape == BASIC_OPEN)
+                            and a.material ~= CONSTRUCTION_MAT then
+                            has_natural_non_open = true
+                        end
                         if a.shape ~= SHAPE_WALL then has_non_wall = true end
                     end
-                    if has_non_open and has_non_wall then goto bfs_analyze_done end
+                    if has_natural_non_open and has_non_wall then goto bfs_analyze_done end
                 end
             end
             ::bfs_analyze_done::
@@ -461,8 +458,8 @@ local function bfs_step()
             if bx + 16 < map.x_count then bfs_enqueue(bx + 16, by,     bz) end
             if by >= 16              then bfs_enqueue(bx,     by - 16,  bz) end
             if by + 16 < map.y_count then bfs_enqueue(bx,     by + 16,  bz) end
-            if has_non_open and bz + 1 < map.z_count then bfs_enqueue(bx, by, bz + 1) end
-            if has_non_wall and bz > 0               then bfs_enqueue(bx, by, bz - 1) end
+            if has_natural_non_open and bz + 1 < map.z_count then bfs_enqueue(bx, by, bz + 1) end
+            if has_non_wall and bz > 0                        then bfs_enqueue(bx, by, bz - 1) end
         end
     end
 
@@ -512,6 +509,22 @@ local function unregister_viewscreen_hook()
     dfhack.onStateChange["smoothfloor_vschange"] = nil
 end
 
+local function register_world_hook()
+    dfhack.onStateChange["smoothfloor_worldload"] = function(sc)
+        if sc ~= SC_WORLD_LOADED then return end
+        if not S.watcher_enabled then return end
+        if not dfhack.isMapLoaded() then return end
+        if is_player_map() then
+            stop_watcher()          -- watcher not needed in fortress mode
+            pcall(do_initial_fort_scan)
+        end
+    end
+end
+
+local function unregister_world_hook()
+    dfhack.onStateChange["smoothfloor_worldload"] = nil
+end
+
 -- ============================================================================
 -- WATCHER
 -- ============================================================================
@@ -523,9 +536,9 @@ local function stop_watcher()
     S.scan_gen           = S.scan_gen + 1
 end
 
--- Fires every SCAN_INTERVAL_TICKS ticks.
--- Fortress mode: scans newly-revealed blocks as the map grows.
--- Adventure mode: seeds BFS from the adventurer's current block and drains it.
+-- Fires every SCAN_INTERVAL_TICKS ticks (adventure mode only).
+-- Seeds BFS from the adventurer's current block and drains it incrementally.
+-- Fortress mode is handled entirely by do_initial_fort_scan via SC_WORLD_LOADED.
 local function scan_tick(gen)
     S.current_timeout_id = -1
     if not S.watcher_enabled  then return end
@@ -536,41 +549,7 @@ local function scan_tick(gen)
     end
 
     if is_player_map() then
-        local blocks    = df.global.world.map.map_blocks
-        local cur_count = #blocks
-        if cur_count > S.bfs_block_count then
-            local tf, tw = 0, 0
-            for i = S.bfs_block_count, cur_count - 1 do
-                local block = blocks[i]
-                if not block.designation[0][0].subterranean then
-                    local f, w = scan_block(block, false)
-                    tf = tf + f; tw = tw + w
-                end
-            end
-            if tf + tw > 0 then
-                log("smoothed: floors=%d walls=%d", tf, tw)
-            end
-            S.bfs_block_count = cur_count
-        end
-
-        -- Rolling re-scan of subterranean blocks to catch tiles dwarves have newly revealed.
-        local all_blocks = df.global.world.map.map_blocks
-        local total      = #all_blocks
-        if total > 0 then
-            local sub_tf, sub_tw = 0, 0
-            for _ = 1, BLOCKS_PER_TICK do
-                local block = all_blocks[S.fort_rescan_idx]
-                if block and block.designation[0][0].subterranean then
-                    local f, w = scan_block(block, false)
-                    sub_tf = sub_tf + f; sub_tw = sub_tw + w
-                end
-                S.fort_rescan_idx = (S.fort_rescan_idx + 1) % total
-            end
-            if sub_tf + sub_tw > 0 then
-                log("underground rescan: floors=%d walls=%d", sub_tf, sub_tw)
-            end
-        end
-
+        -- Fortress scanning is a one-shot at world load; nothing to do here.
         S.current_timeout_id = dfhack.timeout(SCAN_INTERVAL_TICKS, 'ticks', function() scan_tick(gen) end)
         return
     end
@@ -618,36 +597,22 @@ local cmd  = args[1] or "enable"
 if cmd == "enable" then
     if not smooth_inorganic_cache then build_inorganic_cache() end
     register_viewscreen_hook()
+    register_world_hook()
     if dfhack.isMapLoaded() and is_player_map() then
-        scan_all_subterranean()
-        local blocks = df.global.world.map.map_blocks
-        local n      = #blocks
-        local tf, tw = 0, 0
-        for i = 0, n - 1 do
-            local block = blocks[i]
-            if not block.designation[0][0].subterranean then
-                local f, w = scan_block(block, false)
-                tf = tf + f; tw = tw + w
-            end
-        end
-        if tf + tw > 0 then
-            log("smoothed: floors=%d walls=%d", tf, tw)
-        end
-        S.bfs_block_count = n
+        do_initial_fort_scan()
+        -- no watcher needed: SC_WORLD_LOADED hook re-runs the scan on future loads
+    else
+        start_watcher()  -- adventure mode, or map not yet loaded
     end
-    start_watcher()
 elseif cmd == "force" then
-    local runtime = -getTimestamp()
     if not smooth_inorganic_cache then build_inorganic_cache() end
     if dfhack.isMapLoaded() then
         local blocks = df.global.world.map.map_blocks
         local tf, tw = 0, 0
         for i = 0, #blocks - 1 do
-            local f, w = scan_block(blocks[i], true)
+            local f, w = scan_block(blocks[i], true, true)
             tf = tf + f; tw = tw + w
         end
-        runtime = runtime + getTimestamp()
-        log("'force' runtime %09f", runtime / getTimestampDivisor())
         if tf + tw > 0 then
             log("smoothed: floors=%d walls=%d", tf, tw)
         end
@@ -656,6 +621,7 @@ elseif cmd == "force" then
     end
 elseif cmd == "disable" then
     unregister_viewscreen_hook()
+    unregister_world_hook()
     stop_watcher()
     smooth_inorganic_cache = nil
     bfs_reset()
@@ -685,7 +651,7 @@ elseif cmd == "debug" then
                         for ly = 0, 15 do
                             local tt   = block.tiletype[lx][ly]
                             local kind = tt_kind[tt]
-                            if kind == 'sf' or kind == 'sw' --[[or kind == 'lf' or kind == 'lw']] then
+                            if kind == 'sf' or kind == 'sw' or kind == 'lf' or kind == 'lw' then
                                 if not block.designation[lx][ly].hidden then
                                     local wx, wy = bxi * 16 + lx, byi * 16 + ly
                                     local b = get_biome_for_tile(wx, wy, bz)
@@ -698,7 +664,7 @@ elseif cmd == "debug" then
                                             stats[mat_i] = {id = inorg and inorg.id or "?", walls = 0, floors = 0}
                                         end
                                         local s = stats[mat_i]
-                                        if kind == 'sf' --[[or kind == 'lf']] then s.floors = s.floors + 1
+                                        if kind == 'sf' or kind == 'lf' then s.floors = s.floors + 1
                                         else s.walls = s.walls + 1 end
                                     else
                                         nil_biome = nil_biome + 1
