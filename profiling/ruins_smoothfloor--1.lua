@@ -1,4 +1,4 @@
-local profile = false; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__smoothfloor_state = nil; myprofiler.start(); end -- ruins_smoothfloor.lua
+do dfhack.printerr("attempt to run a profiled script!"); return; end;  local profile = "1"; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__smoothfloor_state = nil; myprofiler.start(); end -- ruins_smoothfloor.lua
 
 --   ruins_smoothfloor enable
 --   ruins_smoothfloor disable
@@ -58,12 +58,12 @@ end end end end
 for _, i in pairs(smooth_stone_wall_by_suffix) do smooth_stone_wall_tt_set[i] = true end
 
 -- Per-tiletype kind lookup built once at load
-local tt_kind = (function()
+local tt_kind = (function()                                                                                             --     151  0.003s
     local t = {}
     for i, _ in ipairs(df.tiletype) do
-        local a     = df.tiletype.attrs[i]
+        local a     = df.tiletype.attrs[i]                                                                              --      29
         local mat   = a.material
-        local sa    = df.tiletype_shape.attrs[a.shape]
+        local sa    = df.tiletype_shape.attrs[a.shape]                                                                  --      40
         local basic = sa and sa.basic_shape
         if a.special ~= SPECIAL_SMOOTH then
             if mat == STONE_MAT then
@@ -122,12 +122,12 @@ local function log(msg, ...) print("[smoothfloor] " .. string.format(msg, ...)) 
 
 local smooth_inorganic_cache = nil
 
-local function build_inorganic_cache()
+local function build_inorganic_cache()                                                                                  --    4955  0.080s
     smooth_inorganic_cache = {}
     local count = 0
-    for i, m in ipairs(df.global.world.raws.inorganics.all) do
-        for _, entry in ipairs(SMOOTH_ID_PREFIXES) do
-            if m.id:sub(1, #entry.prefix) == entry.prefix then
+    for i, m in ipairs(df.global.world.raws.inorganics.all) do                                                          --     120
+        for _, entry in ipairs(SMOOTH_ID_PREFIXES) do                                                                   --    1063
+            if m.id:sub(1, #entry.prefix) == entry.prefix then                                                          --    3769
                 smooth_inorganic_cache[i] = entry.cfg
                 count = count + 1
                 break
@@ -141,72 +141,72 @@ end
 -- BIOME LOOKUP
 -- ============================================================================
 
-local function get_biome_for_tile(wx, wy, wz)
-    local rx, ry = maps_getTileBiomeRgn(wx, wy, wz)
-    if not rx then return nil end
-    local ri = maps_getRegionBiome(rx, ry)
-    if not ri then return nil end
-    return geo_biome_find(ri.geo_index)
+local function get_biome_for_tile(wx, wy, wz)                                                                           --  365680  7.285s
+    local rx, ry = maps_getTileBiomeRgn(wx, wy, wz)                                                                     --  211498
+    if not rx then return nil end                                                                                       --   19340
+    local ri = maps_getRegionBiome(rx, ry)                                                                              --   85407
+    if not ri then return nil end                                                                                       --   11944
+    return geo_biome_find(ri.geo_index)                                                                                 --   37491
 end
 
 -- ============================================================================
 -- WALL SUFFIX HELPERS
 -- ============================================================================
 
-local function wall_at(nx, ny, nz)
-    local tt = maps_getTileType(nx, ny, nz)
-    local a  = tt and tiletype_attrs[tt]
-    return a ~= nil and a.shape == SHAPE_WALL
+local function wall_at(nx, ny, nz)                                                                                      --  676317  10.526s
+    local tt = maps_getTileType(nx, ny, nz)                                                                             --  585456
+    local a  = tt and tiletype_attrs[tt]                                                                                --   34591
+    return a ~= nil and a.shape == SHAPE_WALL                                                                           --   56270
 end
 
-local function get_wall_suffix(wx, wy, wz)
-    return (wall_at(wx-1, wy,   wz) and "L" or "")
-        .. (wall_at(wx+1, wy,   wz) and "R" or "")
-        .. (wall_at(wx,   wy-1, wz) and "U" or "")
-        .. (wall_at(wx,   wy+1, wz) and "D" or "")
+local function get_wall_suffix(wx, wy, wz)                                                                              --  496240  13.054s (self 2.527s) [child 10.526s]
+    return (wall_at(wx-1, wy,   wz) and "L" or "")                                                                      --  275274
+        .. (wall_at(wx+1, wy,   wz) and "R" or "")                                                                      --   66030
+        .. (wall_at(wx,   wy-1, wz) and "U" or "")                                                                      --   92923
+        .. (wall_at(wx,   wy+1, wz) and "D" or "")                                                                      --   62013
 end
 
-local function pick_smooth_wall_tt(tbl, fallback, wx, wy, wz)
-    return tbl[get_wall_suffix(wx, wy, wz)] or fallback
+local function pick_smooth_wall_tt(tbl, fallback, wx, wy, wz)                                                           --   13650  13.181s (self 0.128s) [child 13.054s]
+    return tbl[get_wall_suffix(wx, wy, wz)] or fallback                                                                 --   13650
 end
 
 -- ============================================================================
 -- SCAN LOGIC
 -- ============================================================================
 
-local function scan_block(block, resuffix, all_tiles)
-    if not smooth_inorganic_cache then return 0, 0 end
-    local floors, walls = 0, 0
-    local bx = block.map_pos.x
-    local by = block.map_pos.y
-    local bz = block.map_pos.z
+local function scan_block(block, resuffix, all_tiles)                                                                   -- 1058144  41.520s (self 21.039s) [child 20.481s]
+    if not smooth_inorganic_cache then return 0, 0 end                                                                  --     217
+    local floors, walls = 0, 0                                                                                          --     186
+    local bx = block.map_pos.x                                                                                          --     578
+    local by = block.map_pos.y                                                                                          --     309
+    local bz = block.map_pos.z                                                                                          --     366
 
     -- Mineral event cfg: DF display priority — cluster_one(4) > cluster_small(3) > vein(2) > cluster(1).
     -- Equal-priority ties: last in block_events list wins (matches DF behaviour per tile-material.lua).
-    local mine_cfg = {}
-    local mine_pri = {}
-    local function vein_priority(ev)
-        if ev.flags.cluster_one   then return 4
-        elseif ev.flags.cluster_small then return 3
-        elseif ev.flags.vein          then return 2
-        else                               return 1
+    local mine_cfg = {}                                                                                                 --     130
+    local mine_pri = {}                                                                                                 --     176
+    local function vein_priority(ev)                                                                                    --     567  0.014s
+        if ev.flags.cluster_one   then return 4                                                                         --     304
+        elseif ev.flags.cluster_small then return 3                                                                     --      86
+        elseif ev.flags.vein          then return 2                                                                     --     120
+        else                               return 1                                                                     --      57
         end
-    end
-    for _, ev in ipairs(block.block_events) do
-        if getmetatable(ev) == "block_square_event_mineralst" then
-            local c = smooth_inorganic_cache[ev.inorganic_mat]
-            local p = vein_priority(ev)
-            for lx2 = 0, 15 do
-                for ly2 = 0, 15 do
-                    if maps_getTileAssignment(ev.tile_bitmask, lx2, ly2) then
-                        if not mine_pri[lx2] then mine_pri[lx2] = {} end
-                        local cur = mine_pri[lx2][ly2]
-                        if not cur or p >= cur then
-                            mine_pri[lx2][ly2] = p
-                            if c then
+    end                                                                                                                 --     195
+    for _, ev in ipairs(block.block_events) do                                                                          --     587
+        if getmetatable(ev) == "block_square_event_mineralst" then                                                      --     260
+            local c = smooth_inorganic_cache[ev.inorganic_mat]                                                          --     128
+            local p = vein_priority(ev)                                                                                 --     152
+            for lx2 = 0, 15 do                                                                                          --    1558
+                for ly2 = 0, 15 do                                                                                      --   27326
+                    if maps_getTileAssignment(ev.tile_bitmask, lx2, ly2) then                                           --  128600
+                        if not mine_pri[lx2] then mine_pri[lx2] = {} end                                                --   15299
+                        local cur = mine_pri[lx2][ly2]                                                                  --   14228
+                        if not cur or p >= cur then                                                                     --    7217
+                            mine_pri[lx2][ly2] = p                                                                      --   14016
+                            if c then                                                                                   --    7243
                                 if not mine_cfg[lx2] then mine_cfg[lx2] = {} end
                                 mine_cfg[lx2][ly2] = c
-                            elseif mine_cfg[lx2] then
+                            elseif mine_cfg[lx2] then                                                                   --   14021
                                 mine_cfg[lx2][ly2] = nil
                             end
                         end
@@ -216,52 +216,52 @@ local function scan_block(block, resuffix, all_tiles)
         end
     end
 
-    for lx = 0, 15 do
-        for ly = 0, 15 do
-            local tt   = block.tiletype[lx][ly]
-            local kind = tt_kind[tt]
-            if kind == 'sf' or kind == 'sw'
-               or kind == 'mf' or kind == 'mw'
-               or kind == 'sr' or kind == 'mr' then
-                if all_tiles or not block.designation[lx][ly].hidden then
-                    local cfg
-                    if kind == 'mf' or kind == 'mw' or kind == 'mr' then
-                        cfg = mine_cfg[lx] and mine_cfg[lx][ly]
+    for lx = 0, 15 do                                                                                                   --    3845
+        for ly = 0, 15 do                                                                                               --   36107
+            local tt   = block.tiletype[lx][ly]                                                                         --   95666
+            local kind = tt_kind[tt]                                                                                    --   26231
+            if kind == 'sf' or kind == 'sw'                                                                             --   42677
+               or kind == 'mf' or kind == 'mw'                                                                          --   25264
+               or kind == 'sr' or kind == 'mr' then                                                                     --   16648
+                if all_tiles or not block.designation[lx][ly].hidden then                                               --    9614
+                    local cfg                                                                                           --    5766
+                    if kind == 'mf' or kind == 'mw' or kind == 'mr' then                                                --   21614
+                        cfg = mine_cfg[lx] and mine_cfg[lx][ly]                                                         --   14899
                     else
                         -- STONE/LAVA: look up each tile's own biome and geolayer directly.
                         -- Per-tile (not per-block) so tiles near biome boundaries are correct.
-                        local b = get_biome_for_tile(bx + lx, by + ly, bz)
-                        if b then
-                            local layer = b.layers[block.designation[lx][ly].geolayer_index]
-                            if layer then cfg = smooth_inorganic_cache[layer.mat_index] end
+                        local b = get_biome_for_tile(bx + lx, by + ly, bz)                                              --  110118
+                        if b then                                                                                       --    3550
+                            local layer = b.layers[block.designation[lx][ly].geolayer_index]                            --   63646
+                            if layer then cfg = smooth_inorganic_cache[layer.mat_index] end                             --   28559
                         end
                         -- Surface floor geolayer is unreliable (reflects debris layer, not actual rock).
                         -- Probe downward: pass through soil walls and floor-like tiles until the first
                         -- stone/lava wall, whose geolayer identifies the actual geological material.
-                        if not cfg and (kind == 'sf' or kind == 'sr') and block.designation[lx][ly].outside then
-                            for depth = 1, 10 do
-                                local bb = maps_getTileBlock(bx+lx, by+ly, bz-depth)
-                                if not bb then break end
-                                local sub_tt  = bb.tiletype[lx][ly]
-                                local sub_a   = tiletype_attrs[sub_tt]
-                                local sub_mat = sub_a.material
-                                local sub_shp = sub_a.shape
-                                if sub_shp == SHAPE_WALL then
-                                    if sub_mat == STONE_MAT then
-                                        local bbiome = get_biome_for_tile(bx+lx, by+ly, bz-depth)
+                        if not cfg and (kind == 'sf' or kind == 'sr') and block.designation[lx][ly].outside then        --   22562
+                            for depth = 1, 10 do                                                                        --     209
+                                local bb = maps_getTileBlock(bx+lx, by+ly, bz-depth)                                    --     519
+                                if not bb then break end                                                                --     123
+                                local sub_tt  = bb.tiletype[lx][ly]                                                     --     284
+                                local sub_a   = tiletype_attrs[sub_tt]                                                  --      88
+                                local sub_mat = sub_a.material                                                          --      94
+                                local sub_shp = sub_a.shape                                                             --      94
+                                if sub_shp == SHAPE_WALL then                                                           --     232
+                                    if sub_mat == STONE_MAT then                                                        --     245
+                                        local bbiome = get_biome_for_tile(bx+lx, by+ly, bz-depth)                       --      75
                                         if bbiome then
-                                            local bl = bbiome.layers[bb.designation[lx][ly].geolayer_index]
-                                            if bl then cfg = smooth_inorganic_cache[bl.mat_index] end
+                                            local bl = bbiome.layers[bb.designation[lx][ly].geolayer_index]             --     101
+                                            if bl then cfg = smooth_inorganic_cache[bl.mat_index] end                   --      56
                                         end
                                         break
-                                    elseif sub_mat == SOIL_MAT then
+                                    elseif sub_mat == SOIL_MAT then                                                     --     327
                                         -- soil wall: pass through, keep probing
                                     elseif sub_mat == MINERAL_MAT then
                                         -- mineral wall: geolayer_index is reliable here (not a surface tile)
                                         local bbiome = get_biome_for_tile(bx+lx, by+ly, bz-depth)
                                         if bbiome then
-                                            local bl = bbiome.layers[bb.designation[lx][ly].geolayer_index]
-                                            if bl then cfg = smooth_inorganic_cache[bl.mat_index] end
+                                            local bl = bbiome.layers[bb.designation[lx][ly].geolayer_index]             --      39
+                                            if bl then cfg = smooth_inorganic_cache[bl.mat_index] end                   --      35
                                         end
                                         break
                                     else
@@ -278,17 +278,17 @@ local function scan_block(block, resuffix, all_tiles)
                             end
                         end
                     end
-                    local floor_ok = cfg and cfg.floor
-                    local wall_ok  = cfg and cfg.wall
-                    local slope_ok = cfg and cfg.slope
-                    if (kind == 'sf' or kind == 'mf') and floor_ok then
-                        if SMOOTH_FLOOR_TT then block.tiletype[lx][ly] = SMOOTH_FLOOR_TT end
+                    local floor_ok = cfg and cfg.floor                                                                  --   26529
+                    local wall_ok  = cfg and cfg.wall                                                                   --   17648
+                    local slope_ok = cfg and cfg.slope                                                                  --   18905
+                    if (kind == 'sf' or kind == 'mf') and floor_ok then                                                 --   26867
+                        if SMOOTH_FLOOR_TT then block.tiletype[lx][ly] = SMOOTH_FLOOR_TT end                            --      76
                         floors = floors + 1
-                    elseif (kind == 'sw' or kind == 'mw') and wall_ok then
-                        local wtt = pick_smooth_wall_tt(smooth_stone_wall_by_suffix, smooth_stone_wall_fallback, bx+lx, by+ly, bz)
-                        if wtt then block.tiletype[lx][ly] = wtt end
-                        walls = walls + 1
-                    elseif (kind == 'sr' or kind == 'mr') and slope_ok then
+                    elseif (kind == 'sw' or kind == 'mw') and wall_ok then                                              --   21015
+                        local wtt = pick_smooth_wall_tt(smooth_stone_wall_by_suffix, smooth_stone_wall_fallback, bx+lx, by+ly, bz)--    4856
+                        if wtt then block.tiletype[lx][ly] = wtt end                                                    --  135158
+                        walls = walls + 1                                                                               --    7776
+                    elseif (kind == 'sr' or kind == 'mr') and slope_ok then                                             --   19942
                         if SMOOTH_FLOOR_TT then
                             block.tiletype[lx][ly] = SMOOTH_FLOOR_TT
                             local bb_above = maps_getTileBlock(bx+lx, by+ly, bz+1)
@@ -302,7 +302,7 @@ local function scan_block(block, resuffix, all_tiles)
                         floors = floors + 1
                     end
                 end
-            elseif resuffix and kind == 'sw_r' then
+            elseif resuffix and kind == 'sw_r' then                                                                     --   16781
                 if not block.designation[lx][ly].hidden then
                     local wtt = pick_smooth_wall_tt(smooth_stone_wall_by_suffix, smooth_stone_wall_fallback, bx+lx, by+ly, bz)
                     if wtt and wtt ~= tt then
@@ -314,7 +314,7 @@ local function scan_block(block, resuffix, all_tiles)
         end
     end
 
-    return floors, walls
+    return floors, walls                                                                                                --     379
 end
 
 local function is_player_map()
@@ -389,7 +389,7 @@ local function block_key(bx, by, bz)
     return (bx / 16) * 4000000 + (by / 16) * 1000 + bz
 end
 
-local function bfs_reset()
+local function bfs_reset()                                                                                              --       1  0.001s
     S.bfs_queue = {}
     S.bfs_head  = 1
     S.bfs_tail  = 0
@@ -609,9 +609,9 @@ elseif cmd == "force" then
     if dfhack.isMapLoaded() then
         local blocks = df.global.world.map.map_blocks
         local tf, tw = 0, 0
-        for i = 0, #blocks - 1 do
-            local f, w = scan_block(blocks[i], true, true)
-            tf = tf + f; tw = tw + w
+        for i = 0, #blocks - 1 do                                                                                       --      60
+            local f, w = scan_block(blocks[i], true, true)                                                              --     470
+            tf = tf + f; tw = tw + w                                                                                    --     179
         end
         if tf + tw > 0 then
             log("smoothed: floors=%d walls=%d", tf, tw)

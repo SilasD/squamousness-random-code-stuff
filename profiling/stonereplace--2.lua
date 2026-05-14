@@ -1,4 +1,4 @@
-local profile = false; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__stonereplace_state = nil; myprofiler.start(); end  -- stonereplace.lua
+do dfhack.printerr("attempt to run a profiled script!"); return; end;  local profile = '2'; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__stonereplace_state = nil; myprofiler.start(); end  -- stonereplace.lua
 -- replaces the generic INORGANIC:NONE placeholder material on
 -- site-generated buildings (roads, monastery walls/floors, town constructions)
 -- with PLASTCRETE_ID_NULL.
@@ -46,7 +46,7 @@ local function find_target_mat()
 end
 
 -- silent: if true, only prints when replacements were made (for periodic calls).
-local function run_replacement(silent)
+local function run_replacement(silent)                                                                                  --    4561  0.060s
     local m = find_target_mat()
     if not m then
         dfhack.printerr(("[stonereplace] %s not found in loaded raws."):format(TARGET_ID))
@@ -59,12 +59,12 @@ local function run_replacement(silent)
     local count = 0
     local constructions = df.global.world.event.constructions
     local total = #constructions
-    for i = S.scan_cursor, total - 1 do
-        local c = constructions[i]
-        if c.mat_type == PLACEHOLDER_MAT_TYPE and c.mat_index == PLACEHOLDER_MAT_INDEX then
-            c.mat_index = m.index
-            c.item_type = df.item_type.BLOCKS
-            count = count + 1
+    for i = S.scan_cursor, total - 1 do                                                                                 --     608
+        local c = constructions[i]                                                                                      --     593
+        if c.mat_type == PLACEHOLDER_MAT_TYPE and c.mat_index == PLACEHOLDER_MAT_INDEX then                             --    2509
+            c.mat_index = m.index                                                                                       --     236
+            c.item_type = df.item_type.BLOCKS                                                                           --     487
+            count = count + 1                                                                                           --     128
         end
     end
     S.scan_cursor = total
@@ -146,7 +146,7 @@ end
 -- ENABLE / DISABLE / STATUS
 ---------------------------------------------------------------------------
 
-local function enable()
+local function enable()                                                                                                 --       0  0.060s (self 0.000s) [child 0.060s]
     S.scan_cursor = 0
     S.target_mat  = nil
     print("[stonereplace] Running stone replacement...")

@@ -1,4 +1,4 @@
-local profile = '2'; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__ruins_big_state = nil; myprofiler.start(); end -- ruins_big.lua
+do dfhack.printerr("attempt to run a profiled script!"); return; end;  local profile = "1"; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__ruins_big_state = nil; myprofiler.start(); end -- ruins_big.lua
 -- Pre-pass megastructure generator. Must fire before ruins.lua so that placed
 -- walls are visible as ConstructedWall neighbours during LRUD suffix computation.
 --
@@ -27,9 +27,6 @@ local SUPERSTRUCTURE_BIOMES = {
     [df.biome_type.FOREST_TROPICAL_CONIFER]         = true,
     [df.biome_type.FOREST_TROPICAL_DRY_BROADLEAF]   = true,
     [df.biome_type.FOREST_TROPICAL_MOIST_BROADLEAF] = true,
-    [df.biome_type.DESERT_BADLAND]                  = true,     -- TEMPORARY FOR PROFILING
-    [df.biome_type.DESERT_ROCK]                     = true,     -- TEMPORARY FOR PROFILING
-    [df.biome_type.DESERT_SAND]                     = true,     -- TEMPORARY FOR PROFILING
 }
 
 local PLASTCRETE_MAT_TYPE
@@ -113,8 +110,8 @@ local function find_materials()
     return true
 end
 
-local function key_xyz(x, y, z)
-    return (z * 16384 + y) * 16384 + x
+local function key_xyz(x, y, z)                                                                                         --    3581  0.016s
+    return (z * 16384 + y) * 16384 + x                                                                                  --    3581
 end
 
 local function hash_percent(x, y, z)
@@ -184,7 +181,7 @@ end
 
 -- Plant index → is-wall; rebuilt on first use each session.
 local plant_wall_cache = nil
-local function get_plant_wall_cache()
+local function get_plant_wall_cache()                                                                                   --       8  0.000s
     if plant_wall_cache then return plant_wall_cache end
     plant_wall_cache = {}
     local all = df.global.world.raws.plants.all
@@ -198,23 +195,23 @@ end
 
 -- Returns wall_set (key → true) and pos_list ({x,y,z} entries) simultaneously,
 -- eliminating the key-parse round-trip that run_tower_cluster previously needed.
-local function collect_wall_positions(block_list)
+local function collect_wall_positions(block_list)                                                                       --   20611  0.342s (self 0.325s) [child 0.017s]
     local cache    = get_plant_wall_cache()
     local wall_set = {}
     local pos_list = {}
-    for _, block in ipairs(block_list) do
-        for _, ev in ipairs(block.block_events) do
-            if getmetatable(ev) == "block_square_event_grassst" and cache[ev.plant_index] then
-                local bx, by, bz = block.map_pos.x, block.map_pos.y, block.map_pos.z
-                for lx = 0, 15 do
-                    for ly = 0, 15 do
-                        if ev.amount[lx][ly] > 0 then
-                            local wx = bx + lx
-                            local wy = by + ly
-                            local k  = key_xyz(wx, wy, bz)
-                            if not wall_set[k] then
-                                wall_set[k] = true
-                                pos_list[#pos_list + 1] = { x = wx, y = wy, z = bz }
+    for _, block in ipairs(block_list) do                                                                               --     253
+        for _, ev in ipairs(block.block_events) do                                                                      --    1530
+            if getmetatable(ev) == "block_square_event_grassst" and cache[ev.plant_index] then                          --     864
+                local bx, by, bz = block.map_pos.x, block.map_pos.y, block.map_pos.z                                    --      62
+                for lx = 0, 15 do                                                                                       --     226
+                    for ly = 0, 15 do                                                                                   --    3229
+                        if ev.amount[lx][ly] > 0 then                                                                   --    9954
+                            local wx = bx + lx                                                                          --     207
+                            local wy = by + ly                                                                          --     138
+                            local k  = key_xyz(wx, wy, bz)                                                              --    1015
+                            if not wall_set[k] then                                                                     --    1440
+                                wall_set[k] = true                                                                      --     308
+                                pos_list[#pos_list + 1] = { x = wx, y = wy, z = bz }                                    --    1385
                             end
                         end
                     end
@@ -286,38 +283,38 @@ local TC_GAP_PROB        = 15  -- % chance a column is a gap (applies to full wa
 local TC_FORT_PROB       = 10  -- % chance a wall tile is a fortification
 local TC_SPAWN_PROB      = 50  -- % of qualifying clusters that receive a megastructure
 
-local function cluster_positions(pos_list)
+local function cluster_positions(pos_list)                                                                              -- 3294495  33.765s (self 31.764s) [child 2.001s]
     local n      = #pos_list
     local parent = {}
-    for i = 1, n do parent[i] = i end
+    for i = 1, n do parent[i] = i end                                                                                   --     100
 
-    local function find(i)
-        while parent[i] ~= i do
-            parent[i] = parent[parent[i]]
-            i = parent[i]
+    local function find(i)                                                                                              --  231452  2.001s
+        while parent[i] ~= i do                                                                                         --   95677
+            parent[i] = parent[parent[i]]                                                                               --   85561
+            i = parent[i]                                                                                               --   33721
         end
-        return i
+        return i                                                                                                        --   16493
     end
 
-    for i = 1, n do
-        local p = pos_list[i]
-        for j = i + 1, n do
-            local q = pos_list[j]
-            if math.abs(p.z - q.z) <= TC_CLUSTER_Z_RANGE
-               and math.abs(p.x - q.x) <= TC_CLUSTER_RADIUS
-               and math.abs(p.y - q.y) <= TC_CLUSTER_RADIUS then
-                local pi, pj = find(i), find(j)
-                if pi ~= pj then parent[pi] = pj end
+    for i = 1, n do                                                                                                     --      52
+        local p = pos_list[i]                                                                                           --      50
+        for j = i + 1, n do                                                                                             --  250443
+            local q = pos_list[j]                                                                                       --  249465
+            if math.abs(p.z - q.z) <= TC_CLUSTER_Z_RANGE                                                                -- 1976372
+               and math.abs(p.x - q.x) <= TC_CLUSTER_RADIUS                                                             --  496820
+               and math.abs(p.y - q.y) <= TC_CLUSTER_RADIUS then                                                        --  179289
+                local pi, pj = find(i), find(j)                                                                         --  120571
+                if pi ~= pj then parent[pi] = pj end                                                                    --   20665
             end
         end
     end
 
     local groups = {}
-    for i = 1, n do
-        local root = find(i)
-        if not groups[root] then groups[root] = {} end
-        local g = groups[root]
-        g[#g + 1] = pos_list[i]
+    for i = 1, n do                                                                                                     --      75
+        local root = find(i)                                                                                            --     101
+        if not groups[root] then groups[root] = {} end                                                                  --     158
+        local g = groups[root]                                                                                          --      84
+        g[#g + 1] = pos_list[i]                                                                                         --     250
     end
     return groups
 end
@@ -506,7 +503,7 @@ local function process_cluster(cluster, wall_set, existing, road_set)
     return an
 end
 
-local function run_tower_cluster(wall_set, pos_list, existing, road_set)
+local function run_tower_cluster(wall_set, pos_list, existing, road_set)                                                --       1  33.765s (self 0.000s) [child 33.765s]
     if not ENABLED_TOWER_CLUSTER then return end
     if #pos_list == 0 then return end
 
@@ -527,7 +524,7 @@ end
 
 -- ── Main entry ────────────────────────────────────────────────────────────────
 
-local function generate_megastructures(wall_set, pos_list, existing, in_site, road_set)
+local function generate_megastructures(wall_set, pos_list, existing, in_site, road_set)                                 --       0  33.765s (self 0.000s) [child 33.765s]
     if in_site then return end
     run_tower_cluster(wall_set, pos_list, existing, road_set)
     -- future patterns: run_<name>(wall_set, pos_list, existing, road_set)
@@ -535,7 +532,7 @@ end
 
 -- ── Scan system ───────────────────────────────────────────────────────────────
 
-local function convert_big(force)
+local function convert_big(force)                                                                                       --       1  34.107s (self 0.000s) [child 34.106s]
     if not dfhack.isMapLoaded() then return end
     if not PLASTCRETE_MAT_TYPE and not find_materials() then return end
     if is_npc_site() then return end

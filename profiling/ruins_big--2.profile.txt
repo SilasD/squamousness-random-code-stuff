@@ -1,0 +1,197 @@
+Lua Profile output created by profiler.lua. Copyright Pepperfish 2002+
+
+------------------- L:upvalue:cluster_positions@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:289 -------------------
+Sample count:             10148213
+Sample count in children: 667719
+Time spend total:         125.197s
+Time spent in children:   6.450s
+Time spent in profiler:   0.000s
+Time spent in self:       118.746s
+Time spent per sample:    0.000012s/sample
+Time spent in self per sample: 0.000012s/sample
+
+Child L:local:find@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:294 sampled 667719 times. Took 6.450s
+   176 sampled in line 292
+    99 sampled in line 302
+    73 sampled in line 303
+787527 sampled in line 304
+787926 sampled in line 305
+6203604 sampled in line 306
+1298663 sampled in line 307
+615150 sampled in line 308
+382459 sampled in line 309
+ 71328 sampled in line 310
+   134 sampled in line 316
+   236 sampled in line 317
+   270 sampled in line 318
+   144 sampled in line 319
+   424 sampled in line 320
+
+------------------- L:local:find@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:294 -------------------
+Sample count:             667719
+Sample count in children:     0
+Time spend total:         6.450s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       6.450s
+Time spent per sample:    0.000010s/sample
+Time spent in self per sample: 0.000010s/sample
+285400 sampled in line 295
+257105 sampled in line 296
+ 86828 sampled in line 297
+ 38386 sampled in line 299
+
+------------------- L:upvalue:collect_wall_positions@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:201 -------------------
+Sample count:             33785
+Sample count in children:  6487
+Time spend total:         0.613s
+Time spent in children:   0.030s
+Time spent in profiler:   0.000s
+Time spent in self:       0.583s
+Time spent per sample:    0.000015s/sample
+Time spent in self per sample: 0.000017s/sample
+
+Child L:upvalue:get_plant_wall_cache@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:187 sampled     33 times. Took 0.001s
+Child L:upvalue:key_xyz@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:116 sampled   6454 times. Took 0.029s
+   258 sampled in line 205
+  1513 sampled in line 206
+  1126 sampled in line 207
+   112 sampled in line 208
+   378 sampled in line 209
+  5523 sampled in line 210
+ 16878 sampled in line 211
+   369 sampled in line 212
+   191 sampled in line 213
+  1823 sampled in line 214
+  2670 sampled in line 215
+   530 sampled in line 216
+  2414 sampled in line 217
+
+------------------- L:upvalue:key_xyz@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:116 -------------------
+Sample count:              6461
+Sample count in children:     0
+Time spend total:         0.030s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.030s
+Time spent per sample:    0.000005s/sample
+Time spent in self per sample: 0.000005s/sample
+  6461 sampled in line 117
+
+------------------- L:upvalue:build_road_set_light@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:251 -------------------
+Sample count:                19
+Sample count in children:     7
+Time spend total:         0.002s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.002s
+Time spent per sample:    0.000075s/sample
+Time spent in self per sample: 0.000094s/sample
+
+Child L:upvalue:key_xyz@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:116 sampled      7 times. Took 0.000s
+     1 sampled in line 255
+     1 sampled in line 258
+     2 sampled in line 262
+     1 sampled in line 263
+     5 sampled in line 264
+     9 sampled in line 265
+
+------------------- L:upvalue:get_plant_wall_cache@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:187 -------------------
+Sample count:                33
+Sample count in children:     0
+Time spend total:         0.001s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.001s
+Time spent per sample:    0.000021s/sample
+Time spent in self per sample: 0.000021s/sample
+     4 sampled in line 191
+    28 sampled in line 192
+     1 sampled in line 196
+
+-------------------  :local:script_code@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:0 -------------------
+Sample count:                11
+Sample count in children: 10856233
+Time spend total:         125.812s
+Time spent in children:   125.812s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000012s/sample
+Time spent in self per sample: 0.000022s/sample
+
+Child L:local:convert_big@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:538 sampled 10856233 times. Took 125.812s
+     2 sampled in line 57
+     2 sampled in line 58
+     1 sampled in line 59
+     5 sampled in line 60
+     1 sampled in line 625
+
+------------------- L:upvalue:get_existing_set@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:229 -------------------
+Sample count:                 1
+Sample count in children:     0
+Time spend total:         0.000s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000056s/sample
+Time spent in self per sample: 0.000056s/sample
+     1 sampled in line 232
+
+------------------- L:upvalue:run_tower_cluster@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:509 -------------------
+Sample count:                 1
+Sample count in children: 10815932
+Time spend total:         125.197s
+Time spent in children:   125.197s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000012s/sample
+Time spent in self per sample: 0.000011s/sample
+
+Child L:upvalue:cluster_positions@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:289 sampled 10815932 times. Took 125.197s
+     1 sampled in line 516
+
+------------------- L:upvalue:generate_megastructures@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:530 -------------------
+Sample count:                 1
+Sample count in children: 10815933
+Time spend total:         125.197s
+Time spent in children:   125.197s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000012s/sample
+Time spent in self per sample: 0.000005s/sample
+
+Child L:upvalue:run_tower_cluster@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:509 sampled 10815933 times. Took 125.197s
+     1 sampled in line 532
+
+------------------- L:local:convert_big@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:538 -------------------
+Sample count:                 0
+Sample count in children: 10856233
+Time spend total:         125.812s
+Time spent in children:   125.812s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000012s/sample
+Time spent in self per sample: 0.000000s/sample
+
+Child L:upvalue:collect_wall_positions@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:201 sampled  40272 times. Took 0.613s
+Child L:upvalue:get_existing_set@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:229 sampled      1 times. Took 0.000s
+Child L:upvalue:build_road_set_light@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:251 sampled     26 times. Took 0.002s
+Child L:upvalue:generate_megastructures@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:530 sampled 10815934 times. Took 125.197s
+
+------------------- L::<function: 000001CB40188EC0>@C:\Games\Dwarf Fortress\The Long Night\hack\lua\dfhack.lua:1053 -------------------
+Sample count:                 0
+Sample count in children: 10856244
+Time spend total:         125.812s
+Time spent in children:   125.812s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000012s/sample
+Time spent in self per sample: 0.000000s/sample
+
+Child  :local:script_code@...rf Fortress/squamousness-random-code-stuff/ruins_big.lua:0 sampled 10856244 times. Took 125.812s
+
+
+
+Total time spent in profiled functions:   126s
+
+END

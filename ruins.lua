@@ -1,4 +1,4 @@
---[====[ ruins.lua
+local profile = false; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__ruins_state = nil; myprofiler.start(); end --[====[ ruins.lua
 Converts fake-construction grass plants into real DFHack construction records.
 
 Usage:
@@ -10,8 +10,8 @@ Usage:
     ruins debug-roads
 --]====]
 
-local getTimestamp          = dfhack.getQueryPerformanceCounter     or os.clock
-local getTimestampDivisor   = dfhack.getQueryPerformanceFrequency   or function()return 1.0;end
+local getTimestamp          = dfhack.QueryPerformanceCounter     or os.clock
+local getTimestampDivisor   = dfhack.QueryPerformanceFrequency   or function()return 1.0;end
 
 local clocktime = -getTimestamp()
 
@@ -1276,3 +1276,4 @@ elseif cmd == "debug-roads" then
 else
     log("Usage: ruins [enable|force|disable|status|debug|debug-roads]")
 end
+myprofiler.stop(); if profile then myprofiler.generate(dfhack.current_script_name(), profile); end

@@ -1,0 +1,254 @@
+Lua Profile output created by profiler.lua. Copyright Pepperfish 2002+
+
+------------------- L:local:scan_block@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:177 -------------------
+Sample count:             1058144
+Sample count in children: 1552454
+Time spend total:         41.520s
+Time spent in children:   20.481s
+Time spent in profiler:   0.000s
+Time spent in self:       21.039s
+Time spent per sample:    0.000016s/sample
+Time spent in self per sample: 0.000020s/sample
+
+Child L:upvalue:get_biome_for_tile@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:144 sampled 365680 times. Took 7.285s
+Child L:local:vein_priority@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:188 sampled    567 times. Took 0.014s
+Child L:upvalue:pick_smooth_wall_tt@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:169 sampled 1186207 times. Took 13.181s
+   217 sampled in line 178
+   186 sampled in line 179
+   578 sampled in line 180
+   309 sampled in line 181
+   366 sampled in line 182
+   130 sampled in line 186
+   176 sampled in line 187
+   195 sampled in line 194
+   587 sampled in line 195
+   260 sampled in line 196
+   128 sampled in line 197
+   152 sampled in line 198
+  1558 sampled in line 199
+ 27326 sampled in line 200
+128600 sampled in line 201
+ 15299 sampled in line 202
+ 14228 sampled in line 203
+  7217 sampled in line 204
+ 14016 sampled in line 205
+  7243 sampled in line 206
+ 14021 sampled in line 209
+  3845 sampled in line 219
+ 36107 sampled in line 220
+ 95666 sampled in line 221
+ 26231 sampled in line 222
+ 42677 sampled in line 223
+ 25264 sampled in line 224
+ 16648 sampled in line 225
+  9614 sampled in line 226
+  5766 sampled in line 227
+ 21614 sampled in line 228
+ 14899 sampled in line 229
+110118 sampled in line 233
+  3550 sampled in line 234
+ 63646 sampled in line 235
+ 28559 sampled in line 236
+ 22562 sampled in line 241
+   209 sampled in line 242
+   519 sampled in line 243
+   123 sampled in line 244
+   284 sampled in line 245
+    88 sampled in line 246
+    94 sampled in line 247
+    94 sampled in line 248
+   232 sampled in line 249
+   245 sampled in line 250
+    75 sampled in line 251
+    16 sampled in line 252
+   101 sampled in line 253
+    56 sampled in line 254
+    16 sampled in line 255
+   327 sampled in line 257
+    15 sampled in line 259
+    22 sampled in line 261
+     7 sampled in line 262
+    39 sampled in line 263
+    35 sampled in line 264
+    11 sampled in line 265
+ 26529 sampled in line 281
+ 17648 sampled in line 282
+ 18905 sampled in line 283
+ 26867 sampled in line 284
+    76 sampled in line 285
+    14 sampled in line 286
+ 21015 sampled in line 287
+  4856 sampled in line 288
+135158 sampled in line 289
+  7776 sampled in line 290
+ 19942 sampled in line 291
+     2 sampled in line 293
+     2 sampled in line 294
+     1 sampled in line 295
+     9 sampled in line 296
+     5 sampled in line 297
+    11 sampled in line 298
+     2 sampled in line 304
+ 16781 sampled in line 305
+   379 sampled in line 317
+
+------------------- L:upvalue:wall_at@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:156 -------------------
+Sample count:             676317
+Sample count in children:     0
+Time spend total:         10.526s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       10.526s
+Time spent per sample:    0.000016s/sample
+Time spent in self per sample: 0.000016s/sample
+585456 sampled in line 157
+ 34591 sampled in line 158
+ 56270 sampled in line 159
+
+------------------- L:upvalue:get_biome_for_tile@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:144 -------------------
+Sample count:             365680
+Sample count in children:     0
+Time spend total:         7.285s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       7.285s
+Time spent per sample:    0.000020s/sample
+Time spent in self per sample: 0.000020s/sample
+211498 sampled in line 145
+ 19340 sampled in line 146
+ 85407 sampled in line 147
+ 11944 sampled in line 148
+ 37491 sampled in line 149
+
+------------------- L:upvalue:get_wall_suffix@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:162 -------------------
+Sample count:             496240
+Sample count in children: 676317
+Time spend total:         13.054s
+Time spent in children:   10.526s
+Time spent in profiler:   0.000s
+Time spent in self:       2.527s
+Time spent per sample:    0.000011s/sample
+Time spent in self per sample: 0.000005s/sample
+
+Child L:upvalue:wall_at@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:156 sampled 676317 times. Took 10.526s
+275274 sampled in line 163
+ 66030 sampled in line 164
+ 92923 sampled in line 165
+ 62013 sampled in line 166
+
+------------------- L:upvalue:pick_smooth_wall_tt@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:169 -------------------
+Sample count:             13650
+Sample count in children: 1172557
+Time spend total:         13.181s
+Time spent in children:   13.054s
+Time spent in profiler:   0.000s
+Time spent in self:       0.128s
+Time spent per sample:    0.000011s/sample
+Time spent in self per sample: 0.000009s/sample
+
+Child L:upvalue:get_wall_suffix@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:162 sampled 1172557 times. Took 13.054s
+ 13650 sampled in line 170
+
+------------------- L:local:build_inorganic_cache@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:125 -------------------
+Sample count:              4955
+Sample count in children:     0
+Time spend total:         0.080s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.080s
+Time spent per sample:    0.000016s/sample
+Time spent in self per sample: 0.000016s/sample
+   120 sampled in line 128
+  1063 sampled in line 129
+  3769 sampled in line 130
+     2 sampled in line 131
+     1 sampled in line 132
+
+------------------- L:local:vein_priority@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:188 -------------------
+Sample count:               567
+Sample count in children:     0
+Time spend total:         0.014s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.014s
+Time spent per sample:    0.000025s/sample
+Time spent in self per sample: 0.000025s/sample
+   304 sampled in line 189
+    86 sampled in line 190
+   120 sampled in line 191
+    57 sampled in line 192
+
+-------------------  :local:script_code@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:0 -------------------
+Sample count:               713
+Sample count in children: 2615705
+Time spend total:         41.617s
+Time spent in children:   41.604s
+Time spent in profiler:   0.000s
+Time spent in self:       0.013s
+Time spent per sample:    0.000016s/sample
+Time spent in self per sample: 0.000018s/sample
+
+Child L:local:scan_block@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:177 sampled 2610598 times. Took 41.520s
+Child L::<function: 000001C23D340AA0>@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:61 sampled    151 times. Took 0.003s
+Child L:local:build_inorganic_cache@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:125 sampled   4955 times. Took 0.080s
+Child L:local:bfs_reset@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:392 sampled      1 times. Took 0.001s
+     1 sampled in line 52
+     1 sampled in line 53
+     1 sampled in line 58
+     1 sampled in line 91
+    60 sampled in line 612
+   470 sampled in line 613
+   179 sampled in line 614
+
+------------------- L::<function: 000001C23D340AA0>@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:61 -------------------
+Sample count:               151
+Sample count in children:     0
+Time spend total:         0.003s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.003s
+Time spent per sample:    0.000019s/sample
+Time spent in self per sample: 0.000019s/sample
+     8 sampled in line 63
+    29 sampled in line 64
+     5 sampled in line 65
+    40 sampled in line 66
+    13 sampled in line 67
+    21 sampled in line 68
+    10 sampled in line 69
+     3 sampled in line 70
+    10 sampled in line 73
+     5 sampled in line 74
+     1 sampled in line 75
+     1 sampled in line 76
+     2 sampled in line 78
+     3 sampled in line 79
+
+------------------- L:local:bfs_reset@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:392 -------------------
+Sample count:                 1
+Sample count in children:     0
+Time spend total:         0.001s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.001s
+Time spent per sample:    0.001246s/sample
+Time spent in self per sample: 0.001246s/sample
+     1 sampled in line 395
+
+------------------- L::<function: 000001C23A15F4E0>@C:\Games\Dwarf Fortress\The Long Night\hack\lua\dfhack.lua:1053 -------------------
+Sample count:                 0
+Sample count in children: 2616418
+Time spend total:         41.617s
+Time spent in children:   41.617s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000016s/sample
+Time spent in self per sample: 0.000000s/sample
+
+Child  :local:script_code@...ess/squamousness-random-code-stuff/ruins_smoothfloor.lua:0 sampled 2616418 times. Took 41.617s
+
+
+
+Total time spent in profiled functions:  41.6s
+
+END

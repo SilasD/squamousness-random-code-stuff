@@ -1,4 +1,4 @@
-local profile = '2'; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__ruins_big_state = nil; myprofiler.start(); end -- ruins_big.lua
+do dfhack.printerr("attempt to run a profiled script!"); return; end;  local profile = '2'; myprofiler = reqscript("myprofiler"); myprofiler.stop(); if profile then _G.__ruins_big_state = nil; myprofiler.start(); end -- ruins_big.lua
 -- Pre-pass megastructure generator. Must fire before ruins.lua so that placed
 -- walls are visible as ConstructedWall neighbours during LRUD suffix computation.
 --
@@ -27,9 +27,9 @@ local SUPERSTRUCTURE_BIOMES = {
     [df.biome_type.FOREST_TROPICAL_CONIFER]         = true,
     [df.biome_type.FOREST_TROPICAL_DRY_BROADLEAF]   = true,
     [df.biome_type.FOREST_TROPICAL_MOIST_BROADLEAF] = true,
-    [df.biome_type.DESERT_BADLAND]                  = true,     -- TEMPORARY FOR PROFILING
-    [df.biome_type.DESERT_ROCK]                     = true,     -- TEMPORARY FOR PROFILING
-    [df.biome_type.DESERT_SAND]                     = true,     -- TEMPORARY FOR PROFILING
+    [df.biome_type.DESERT_BADLAND]                  = true,
+    [df.biome_type.DESERT_ROCK]                     = true,
+    [df.biome_type.DESERT_SAND]                     = true,
 }
 
 local PLASTCRETE_MAT_TYPE
@@ -113,8 +113,8 @@ local function find_materials()
     return true
 end
 
-local function key_xyz(x, y, z)
-    return (z * 16384 + y) * 16384 + x
+local function key_xyz(x, y, z)                                                                                         --    6461  0.030s
+    return (z * 16384 + y) * 16384 + x                                                                                  --    6461
 end
 
 local function hash_percent(x, y, z)
@@ -184,12 +184,12 @@ end
 
 -- Plant index → is-wall; rebuilt on first use each session.
 local plant_wall_cache = nil
-local function get_plant_wall_cache()
+local function get_plant_wall_cache()                                                                                   --      33  0.001s
     if plant_wall_cache then return plant_wall_cache end
     plant_wall_cache = {}
     local all = df.global.world.raws.plants.all
     for i = 0, #all - 1 do
-        if WALL_PLANT_IDS[tostring(all[i].id or "")] then
+        if WALL_PLANT_IDS[tostring(all[i].id or "")] then                                                               --      28
             plant_wall_cache[i] = true
         end
     end
@@ -198,23 +198,23 @@ end
 
 -- Returns wall_set (key → true) and pos_list ({x,y,z} entries) simultaneously,
 -- eliminating the key-parse round-trip that run_tower_cluster previously needed.
-local function collect_wall_positions(block_list)
+local function collect_wall_positions(block_list)                                                                       --   33785  0.613s (self 0.583s) [child 0.030s]
     local cache    = get_plant_wall_cache()
     local wall_set = {}
     local pos_list = {}
-    for _, block in ipairs(block_list) do
-        for _, ev in ipairs(block.block_events) do
-            if getmetatable(ev) == "block_square_event_grassst" and cache[ev.plant_index] then
-                local bx, by, bz = block.map_pos.x, block.map_pos.y, block.map_pos.z
-                for lx = 0, 15 do
-                    for ly = 0, 15 do
-                        if ev.amount[lx][ly] > 0 then
-                            local wx = bx + lx
-                            local wy = by + ly
-                            local k  = key_xyz(wx, wy, bz)
-                            if not wall_set[k] then
-                                wall_set[k] = true
-                                pos_list[#pos_list + 1] = { x = wx, y = wy, z = bz }
+    for _, block in ipairs(block_list) do                                                                               --     258
+        for _, ev in ipairs(block.block_events) do                                                                      --    1513
+            if getmetatable(ev) == "block_square_event_grassst" and cache[ev.plant_index] then                          --    1126
+                local bx, by, bz = block.map_pos.x, block.map_pos.y, block.map_pos.z                                    --     112
+                for lx = 0, 15 do                                                                                       --     378
+                    for ly = 0, 15 do                                                                                   --    5523
+                        if ev.amount[lx][ly] > 0 then                                                                   --   16878
+                            local wx = bx + lx                                                                          --     369
+                            local wy = by + ly                                                                          --     191
+                            local k  = key_xyz(wx, wy, bz)                                                              --    1823
+                            if not wall_set[k] then                                                                     --    2670
+                                wall_set[k] = true                                                                      --     530
+                                pos_list[#pos_list + 1] = { x = wx, y = wy, z = bz }                                    --    2414
                             end
                         end
                     end
@@ -248,7 +248,7 @@ end
 
 -- Seed-only road exclusion from civzone road buildings; no BFS.
 -- ruins.lua's full BFS covers the CONCRETE tile pass.
-local function build_road_set_light()
+local function build_road_set_light()                                                                                   --      19  0.002s (self 0.002s) [child 0.000s]
     local road_set = {}
     local bother   = df.global.world.buildings.other
     local keys = {
@@ -286,38 +286,38 @@ local TC_GAP_PROB        = 15  -- % chance a column is a gap (applies to full wa
 local TC_FORT_PROB       = 10  -- % chance a wall tile is a fortification
 local TC_SPAWN_PROB      = 50  -- % of qualifying clusters that receive a megastructure
 
-local function cluster_positions(pos_list)
+local function cluster_positions(pos_list)                                                                              --10148213  125.197s (self 118.746s) [child 6.450s]
     local n      = #pos_list
     local parent = {}
-    for i = 1, n do parent[i] = i end
+    for i = 1, n do parent[i] = i end                                                                                   --     176
 
-    local function find(i)
-        while parent[i] ~= i do
-            parent[i] = parent[parent[i]]
-            i = parent[i]
+    local function find(i)                                                                                              --  667719  6.450s
+        while parent[i] ~= i do                                                                                         --  285400
+            parent[i] = parent[parent[i]]                                                                               --  257105
+            i = parent[i]                                                                                               --   86828
         end
-        return i
+        return i                                                                                                        --   38386
     end
 
-    for i = 1, n do
-        local p = pos_list[i]
-        for j = i + 1, n do
-            local q = pos_list[j]
-            if math.abs(p.z - q.z) <= TC_CLUSTER_Z_RANGE
-               and math.abs(p.x - q.x) <= TC_CLUSTER_RADIUS
-               and math.abs(p.y - q.y) <= TC_CLUSTER_RADIUS then
-                local pi, pj = find(i), find(j)
-                if pi ~= pj then parent[pi] = pj end
+    for i = 1, n do                                                                                                     --      99
+        local p = pos_list[i]                                                                                           --      73
+        for j = i + 1, n do                                                                                             --  787527
+            local q = pos_list[j]                                                                                       --  787926
+            if math.abs(p.z - q.z) <= TC_CLUSTER_Z_RANGE                                                                -- 6203604
+               and math.abs(p.x - q.x) <= TC_CLUSTER_RADIUS                                                             -- 1298663
+               and math.abs(p.y - q.y) <= TC_CLUSTER_RADIUS then                                                        --  615150
+                local pi, pj = find(i), find(j)                                                                         --  382459
+                if pi ~= pj then parent[pi] = pj end                                                                    --   71328
             end
         end
     end
 
     local groups = {}
-    for i = 1, n do
-        local root = find(i)
-        if not groups[root] then groups[root] = {} end
-        local g = groups[root]
-        g[#g + 1] = pos_list[i]
+    for i = 1, n do                                                                                                     --     134
+        local root = find(i)                                                                                            --     236
+        if not groups[root] then groups[root] = {} end                                                                  --     270
+        local g = groups[root]                                                                                          --     144
+        g[#g + 1] = pos_list[i]                                                                                         --     424
     end
     return groups
 end
@@ -506,7 +506,7 @@ local function process_cluster(cluster, wall_set, existing, road_set)
     return an
 end
 
-local function run_tower_cluster(wall_set, pos_list, existing, road_set)
+local function run_tower_cluster(wall_set, pos_list, existing, road_set)                                                --       1  125.197s (self 0.000s) [child 125.197s]
     if not ENABLED_TOWER_CLUSTER then return end
     if #pos_list == 0 then return end
 
@@ -527,7 +527,7 @@ end
 
 -- ── Main entry ────────────────────────────────────────────────────────────────
 
-local function generate_megastructures(wall_set, pos_list, existing, in_site, road_set)
+local function generate_megastructures(wall_set, pos_list, existing, in_site, road_set)                                 --       1  125.197s (self 0.000s) [child 125.197s]
     if in_site then return end
     run_tower_cluster(wall_set, pos_list, existing, road_set)
     -- future patterns: run_<name>(wall_set, pos_list, existing, road_set)
@@ -535,7 +535,7 @@ end
 
 -- ── Scan system ───────────────────────────────────────────────────────────────
 
-local function convert_big(force)
+local function convert_big(force)                                                                                       --       0  125.812s (self 0.000s) [child 125.812s]
     if not dfhack.isMapLoaded() then return end
     if not PLASTCRETE_MAT_TYPE and not find_materials() then return end
     if is_npc_site() then return end

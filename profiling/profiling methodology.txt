@@ -1,0 +1,115 @@
+Profiling of certain DFHack scripts for Dwarf Fortress mod "The Long Night" v7.5.
+
+profiling was performed on these DFHack Lua scripts:
+    ruins.lua
+    ruins_big.lua
+    ruins_stonefloor.lua
+    stonereplace.lua
+
+Dwarf Fortress v53.12 and a customized DFHack v53.12-r1 was used.  the customisations
+allowed the profiler to use the Windows API calls QueryPerformanceCounter and
+QueryPerformanceFrequency.  no other customizations were made.
+
+the profiler was the Pepperfish profiler supplied with DFhack, modified to use
+QueryPerformanceCounter, and with a wrapper around the API to make it easier to use.
+custom code was used to annotate copies of the scripts with the generated profiling
+results.
+annotations were not added to function definitions with less than three hundred
+microseonds of execution time (including children).  (TODO tune)
+annotations were not added to individual lines with less than 25 hits.  (TODO tune)
+
+the source data set was the Dwarf Fortress mod "Squamous_The_Long_Night (225)",
+zipfile name "The Long Night 7.5.zip".  the version profiled was the 2026-05-11 beta
+test, which is at least the second variant of version 225.
+the zipfile was downloaded from a Discord post on the DFHack server,
+posted by user Squamous on 2026-05-11 at 12:24 AM GMT,
+https://discord.com/channels/793331351645323264/807443277132595211/1503538348143415317
+
+replacement scripts for ruins.lua, ruins_smoothfloor.lua, and stonereplace.lua
+were downloaded from another Discord post on the DFHack server,
+posted by user Squamous on 2026-05-12 at 10:48 PM GMT,
+https://discord.com/channels/793331351645323264/807443277132595211/1503876478952017960
+and are presumably the most recent versions.  (ruins.lua had my notes and timing
+code -- it is questionable whether it is the actual most recent; however the version
+in the zipfile is dated 2026-04-30.)
+
+the world was created in Detailed mode, with all vanilla configuration mods removed
+and the "The Long Night" mod file installed.  the worldgen parameter set was 
+"LONG NIGHT SMALL DENSE".  the parameter "End Year" was changed to 250.  worldgen was
+not monitored but appeared to complete normally.  there were a few errors logged in
+errorlog.txt, but nothing relevant.
+
+the site tested was a player fortress, size 3x3, with three biomes: 5 tiles of
+temperate conifer forest, three tiles of temperate savanna, and one tile of badlands.
+this was chosen to allow both ruins.lua and ruins_big.lua to run.  Play now! was used.
+it was quite difficult to find forests -- there were only two small conifer forests
+on the map.
+
+the top stone layer were plastcrete variants.  there appeared to be no pebbles or
+boulder tiles of any stone type that would be processed by ruins_smoothfloor.lua,
+so smoothing of these tile types could not be tested.  the next stone layer was a
+light structure variant for the forest and savanna, and a decayed structure variant
+for the badlands.  the badlands' third layer was a heavy structure type.
+additionally there was a median structure and a heavy structure (badlands biome) at
+the first cavern level.  the map had a magma pipe, so smoothing (or lack thereof)
+of lava stone (slag) could be tested.
+
+profiling involved editing each script to start the profiler at the start of the
+script, and stop the profiler and process the results at the end of the script.
+the profiler defaults of 'time' and '10000' were used.  the global state variable
+for each script was also set to nil at the start of profiling.
+
+the ruins.lua script was edited to change the names of the QueryPerformance*
+functions, because these had changed in the customised DFHack build.
+
+the stonereplace.lua script did not support parameter 'force'.  the 'enable' parameter
+was used with these code changes: the calls to start_watcher() and schedule_initial()
+were commented out.
+
+each script was executed separately, with no other mod scripts running or previously
+run on the savegame.  this was enforced by disabling the mod's loader, ln_autoload.lua.
+
+each script was executed with the commandline parameter 'force'.  this parameter runs
+all of the script code at once instead of executing via a timer callback.
+(the profiler does not support timer callbacks.)
+
+before each profiling run, the game was stopped (generally using 'die') and
+restarted, and the savegame was loaded.  after load, the game's main window
+was minimized, and the script being profiled was started from the DFhack 
+console window.  profiling was performed on savegame tick 0 -- i.e. the game
+was not allowed to advance the simulation.
+
+fort-mode profiling:
+
+profiling of ruins.lua turned up a bug in the profiler -- nested functions
+that are closures are not handled correctly.  data for these functions will
+be deleted manually.  later: or perhaps not -- some closures are handled
+properly.  needs more analysis.  this issue corrupted data for one nested
+function, but is otherwise not relevant to the profiling results.
+later: closures are very much a problem.  they balloon the size of the
+profiling output files, and my script-annotation code doesn't deal with
+this well.
+
+ruins_smoothfloor.lua profiled without issues.
+
+ruins_big.lua runs and profiles, but doesn't seem to modify the map, despite
+having a biome that should have allowed the script to do its work.
+
+stonereplace is only necessary in adventure mode; it doesn't even profile in
+fort mode.
+
+adventure-mode profiling:
+
+still can't test the timer code.  stonereplace was profiled in save A1, a
+large city, just outside the entrance to the keep, as entered from fast
+travel.  the script ran very fast.  stonereplace is not a problem.
+
+ruins was profiled from save A2, an area with a grassland-type biome.  the
+map south of the adventurer is snowy.  the structure creation succeeded with
+some notable flaws with unusable up stairs.  good profiling run.
+
+ruins_big runs for several seconds on save A2, but does not appear to modify
+the map.  this is expected, since save A2 is not in a forest biome.  after
+some time and frustration attempting to locate one of the two small forests,
+the script was modified to also trigger on sand desert, rock desert, and
+badlands biomes.

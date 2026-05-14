@@ -1,0 +1,71 @@
+Lua Profile output created by profiler.lua. Copyright Pepperfish 2002+
+
+------------------- L:upvalue:run_replacement@...Fortress/squamousness-random-code-stuff/stonereplace.lua:49 -------------------
+Sample count:              4561
+Sample count in children:     0
+Time spend total:         0.060s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.060s
+Time spent per sample:    0.000013s/sample
+Time spent in self per sample: 0.000013s/sample
+   608 sampled in line 62
+   593 sampled in line 63
+  2509 sampled in line 64
+   236 sampled in line 65
+   487 sampled in line 66
+   128 sampled in line 67
+
+------------------- L:field:stop@C:/Games/Dwarf Fortress/Broken World repo/myprofiler.lua:27 -------------------
+Sample count:                 1
+Sample count in children:     0
+Time spend total:         0.001s
+Time spent in children:   0.000s
+Time spent in profiler:   0.000s
+Time spent in self:       0.001s
+Time spent per sample:    0.001455s/sample
+Time spent in self per sample: 0.001455s/sample
+     1 sampled in line 28
+
+------------------- L::<function: 0000020230BA9B70>@C:\Games\Dwarf Fortress\The Long Night\hack\lua\dfhack.lua:1053 -------------------
+Sample count:                 0
+Sample count in children:  4562
+Time spend total:         0.061s
+Time spent in children:   0.061s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000013s/sample
+Time spent in self per sample: 0.000000s/sample
+
+Child  :local:script_code@...Fortress/squamousness-random-code-stuff/stonereplace.lua:0 sampled   4562 times. Took 0.061s
+
+------------------- L:local:enable@...Fortress/squamousness-random-code-stuff/stonereplace.lua:149 -------------------
+Sample count:                 0
+Sample count in children:  4561
+Time spend total:         0.060s
+Time spent in children:   0.060s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000013s/sample
+Time spent in self per sample: 0.000000s/sample
+
+Child L:upvalue:run_replacement@...Fortress/squamousness-random-code-stuff/stonereplace.lua:49 sampled   4561 times. Took 0.060s
+
+-------------------  :local:script_code@...Fortress/squamousness-random-code-stuff/stonereplace.lua:0 -------------------
+Sample count:                 0
+Sample count in children:  4562
+Time spend total:         0.061s
+Time spent in children:   0.061s
+Time spent in profiler:   0.000s
+Time spent in self:       0.000s
+Time spent per sample:    0.000013s/sample
+Time spent in self per sample: 0.000000s/sample
+
+Child L:local:enable@...Fortress/squamousness-random-code-stuff/stonereplace.lua:149 sampled   4561 times. Took 0.060s
+Child L:field:stop@C:/Games/Dwarf Fortress/Broken World repo/myprofiler.lua:27 sampled      1 times. Took 0.001s
+
+
+
+Total time spent in profiled functions: 0.0613s
+
+END
